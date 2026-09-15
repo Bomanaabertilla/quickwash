@@ -14,11 +14,14 @@ import PreferencesScreen from './components/PreferencesScreen.jsx';
 import PaymentCheckoutScreen from './components/PaymentCheckoutScreen.jsx';
 import OrderConfirmationScreen from './components/OrderConfirmationScreen.jsx';
 import TrackLaundryScreen from './components/TrackLaundryScreen.jsx';
+import OwnerAuthScreen from './components/OwnerAuthScreen.jsx';
+import OwnerDashboardScreen from './components/OwnerDashboardScreen.jsx';
+import OwnerProfileSetupScreen from './components/OwnerProfileSetupScreen.jsx';
 import { PARTNERS_DATA, CATEGORIES } from './data/partners.js';
-import { Smartphone, Maximize2, CheckCircle } from 'lucide-react';
+import { Smartphone, Maximize2, CheckCircle, Store } from 'lucide-react';
 
 export default function App() {
-  // Navigation & Screen state: 'providers' | 'provider-detail' | 'services' | 'preferences' | 'payment' | 'confirmation' | 'tracking'
+  // Navigation & Screen state: 'providers' | 'provider-detail' | 'services' | 'preferences' | 'payment' | 'confirmation' | 'tracking' | 'owner-login' | 'owner-dashboard' | 'owner-profile'
   const [currentScreen, setCurrentScreen] = useState('providers');
 
   const [selectedPartnerId, setSelectedPartnerId] = useState('sparkle');
@@ -107,6 +110,15 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#0b1320] flex flex-col items-center justify-center p-2 sm:p-4 relative font-sans">
       
+      {/* Owner Hub Access Button */}
+      <button
+        onClick={() => setCurrentScreen(currentScreen === 'owner-dashboard' || currentScreen === 'owner-login' ? 'providers' : 'owner-login')}
+        className="fixed top-4 left-4 bg-[#006a60] text-white px-4 py-2 rounded-full text-xs font-extrabold shadow-lg hover:bg-[#005850] transition-all flex items-center gap-2 z-50 border border-teal-400/30"
+      >
+        <Store className="w-4 h-4 text-amber-300" />
+        <span>{currentScreen.startsWith('owner') ? 'Customer App' : 'Owner Hub'}</span>
+      </button>
+
       {/* Viewport Frame Mode Switcher */}
       <button
         onClick={() => setIsResponsiveMode(!isResponsiveMode)}
@@ -278,6 +290,39 @@ export default function App() {
             onBack={() => setCurrentScreen('confirmation')}
             onSupportClick={() => showToast('Connecting to Customer Support...')}
             onProfileClick={() => showToast('User Profile Account')}
+          />
+        )}
+
+        {currentScreen === 'owner-login' && (
+          <OwnerAuthScreen
+            onLoginSuccess={() => {
+              showToast('Welcome back, Store Owner!');
+              setCurrentScreen('owner-dashboard');
+            }}
+            onBackToApp={() => setCurrentScreen('providers')}
+          />
+        )}
+
+        {currentScreen === 'owner-dashboard' && (
+          <OwnerDashboardScreen
+            onBackToApp={() => setCurrentScreen('providers')}
+            onOpenProfile={() => setCurrentScreen('owner-profile')}
+            onLogout={() => {
+              showToast('Logged out of Owner Hub');
+              setCurrentScreen('owner-login');
+            }}
+          />
+        )}
+
+        {currentScreen === 'owner-profile' && (
+          <OwnerProfileSetupScreen
+            onBackToDashboard={() => setCurrentScreen('owner-dashboard')}
+            onBackToApp={() => setCurrentScreen('providers')}
+            onLogout={() => {
+              showToast('Logged out of Owner Hub');
+              setCurrentScreen('owner-login');
+            }}
+            onSupportClick={() => showToast('Connecting to Customer Support...')}
           />
         )}
       </div>
