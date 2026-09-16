@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ArrowLeft, 
   HelpCircle, 
@@ -19,8 +19,10 @@ import {
   Truck,
   Leaf,
   Shield,
-  Zap
+  Zap,
+  AlertCircle
 } from 'lucide-react';
+import { getPublishedAvailability } from '../data/availabilityStore.js';
 
 export default function ProviderDetailScreen({
   partner,
@@ -29,64 +31,93 @@ export default function ProviderDetailScreen({
   onSupportClick,
   onProfileClick
 }) {
-  const [selectedDate, setSelectedDate] = useState('Tue 13');
+  const [publishedSchedule, setPublishedSchedule] = useState(() => getPublishedAvailability());
+  const [selectedDateId, setSelectedDateId] = useState('tue');
   const [selectedSlot, setSelectedSlot] = useState({
     time: '1:30 PM',
-    date: 'Tue May 13',
+    date: 'Tue May 26',
     period: 'Afternoon'
   });
   const [isRetrying, setIsRetrying] = useState(false);
 
+  // Listen for live published schedule updates from the owner dashboard
+  useEffect(() => {
+    const handleSync = (e) => {
+      if (e.detail) {
+        setPublishedSchedule(e.detail);
+      }
+    };
+    window.addEventListener('quickwash:availability_updated', handleSync);
+    return () => window.removeEventListener('quickwash:availability_updated', handleSync);
+  }, []);
+
   const handleRetryOffline = () => {
     setIsRetrying(true);
-    setTimeout(() => setIsRetrying(false), 800);
+    setTimeout(() => {
+      setPublishedSchedule(getPublishedAvailability());
+      setIsRetrying(false);
+    }, 600);
   };
 
-  const datesData = [
-    { day: 'Mon', num: '12', label: 'May', isToday: false },
-    { day: 'Tue', num: '13', label: 'Today', isToday: true },
-    { day: 'Wed', num: '14', label: 'May', isToday: false },
-    { day: 'Thu', num: '15', label: 'May', isToday: false },
-    { day: 'Fri', num: '16', label: 'May', isToday: false }
-  ];
+  // Selected Day Object from published schedule
+  const activeDay = useMemo(() => {
+    const found = publishedSchedule.days?.find(d => d.id === selectedDateId);
+    return found || publishedSchedule.days?.[0] || null;
+  }, [publishedSchedule, selectedDateId]);
 
-  const slotsData = [
-    {
-      period: 'Morning',
-      timeRange: '8:00 AM – 11:00 AM',
-      icon: Sunrise,
-      slots: [
-        { time: '8:00 AM', status: 'Booked' },
-        { time: '9:00 AM', status: 'Available' },
-        { time: '10:15 AM', status: 'Available' },
-      ]
-    },
-    {
-      period: 'Afternoon',
-      timeRange: '12:00 PM – 3:00 PM',
-      icon: Sun,
-      slots: [
-        { time: '12:15 PM', status: 'Available' },
-        { time: '1:30 PM', status: 'Available' },
-        { time: '2:45 PM', status: 'Booked' },
-      ]
-    },
-    {
-      period: 'Evening',
-      timeRange: '4:00 PM – 7:00 PM',
-      icon: Moon,
-      slots: [
-        { time: '4:15 PM', status: 'Available' },
-        { time: '5:30 PM', status: 'Available' },
-        { time: '6:45 PM', status: 'Available' },
-      ]
+  // Dynamic slots data based on the owner's published slots for the selected day
+  const slotsData = useMemo(() => {
+    if (!activeDay || activeDay.status === 'Closed' || !activeDay.slots || activeDay.slots.length === 0) {
+      return [];
     }
-  ];
+
+    const morning = activeDay.slots.filter(s => s.period === 'Morning' || s.time.includes('AM'));
+    const afternoon = activeDay.slots.filter(s => s.period === 'Afternoon' || (s.time.includes('PM') && !s.time.startsWith('5') && !s.time.startsWith('6') && !s.time.startsWith('7')));
+    const evening = activeDay.slots.filter(s => s.period === 'Evening' || s.time.startsWith('4') || s.time.startsWith('5') || s.time.startsWith('6') || s.time.startsWith('7'));
+
+    const sections = [];
+    if (morning.length > 0) {
+      sections.push({
+        period: 'Morning',
+        timeRange: '8:00 AM – 11:30 AM',
+        icon: Sunrise,
+        slots: morning
+      });
+    }
+    if (afternoon.length > 0) {
+      sections.push({
+        period: 'Afternoon',
+        timeRange: '12:00 PM – 3:30 PM',
+        icon: Sun,
+        slots: afternoon
+      });
+    }
+    if (evening.length > 0) {
+      sections.push({
+        period: 'Evening',
+        timeRange: '4:00 PM – 7:00 PM',
+        icon: Moon,
+        slots: evening
+      });
+    }
+
+    // Fallback if no period matched
+    if (sections.length === 0 && activeDay.slots.length > 0) {
+      sections.push({
+        period: 'Open Slots',
+        timeRange: activeDay.hours || '8:00 AM – 6:30 PM',
+        icon: Sun,
+        slots: activeDay.slots
+      });
+    }
+
+    return sections;
+  }, [activeDay]);
 
   const handleSelectSlot = (slotTime, period) => {
     setSelectedSlot({
       time: slotTime,
-      date: 'Tue May 13',
+      date: `${activeDay.name} ${activeDay.date}`,
       period: period
     });
   };
@@ -264,105 +295,133 @@ export default function ProviderDetailScreen({
           </p>
         </div>
 
-        {/* 5-Day Horizontal Date Picker Grid */}
-        <div className="grid grid-cols-5 gap-2">
-          {datesData.map((d) => {
-            const isSelected = selectedDate === `${d.day} ${d.num}`;
+        {/* Horizontal Date Picker Grid (Synchronized with Owner's Published Week) */}
+        <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+          {publishedSchedule.days && publishedSchedule.days.map((d) => {
+            const isSelected = selectedDateId === d.id;
+            const isClosed = d.status === 'Closed';
+
             return (
               <button
-                key={d.num}
-                onClick={() => setSelectedDate(`${d.day} ${d.num}`)}
-                className={`py-2.5 px-1 rounded-2xl flex flex-col items-center justify-center text-center transition-all ${
+                key={d.id}
+                onClick={() => setSelectedDateId(d.id)}
+                className={`py-2 px-1 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer ${
                   isSelected
                     ? 'bg-[#006a60] text-white shadow-md shadow-[#006a60]/20 scale-[1.02]'
+                    : isClosed
+                    ? 'bg-slate-100/80 text-slate-400 border border-slate-200/50 hover:bg-slate-200/60'
                     : 'bg-white text-slate-700 border border-slate-200/80 hover:bg-slate-50'
                 }`}
               >
-                <span className="text-[11px] font-medium opacity-80">{d.day}</span>
-                <span className="text-base font-extrabold leading-tight my-0.5">{d.num}</span>
-                <span className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded-full ${
-                  isSelected ? 'bg-teal-700 text-teal-100' : 'text-slate-400'
+                <span className="text-[10px] font-bold uppercase opacity-80">{d.name}</span>
+                <span className="text-sm sm:text-base font-black leading-tight my-0.5">{d.dayNum}</span>
+                <span className={`text-[9px] font-extrabold px-1 py-0.2 rounded-md ${
+                  isSelected 
+                    ? 'bg-teal-700 text-teal-100' 
+                    : isClosed 
+                    ? 'bg-slate-200 text-slate-500' 
+                    : 'text-emerald-700 bg-emerald-50'
                 }`}>
-                  {d.label}
+                  {isClosed ? 'Closed' : 'Open'}
                 </span>
               </button>
             );
           })}
         </div>
 
-        {/* Time Slots Sections */}
-        <div className="flex flex-col gap-4 mt-1">
-          {slotsData.map((section) => {
-            const SectionIcon = section.icon;
-            return (
-              <div key={section.period} className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <SectionIcon className="w-4 h-4 text-[#006a60]" />
-                    <span className="text-sm font-extrabold text-slate-900">{section.period}</span>
+        {/* Closed Day Notice or Dynamic Time Slots */}
+        {activeDay && activeDay.status === 'Closed' ? (
+          <div className="bg-amber-50/80 border border-amber-200/80 rounded-3xl p-6 flex flex-col items-center justify-center text-center gap-2 my-2 shadow-2xs">
+            <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center">
+              <Clock className="w-5 h-5" />
+            </div>
+            <h3 className="font-extrabold text-sm text-slate-900">
+              No pickup slots on {activeDay.fullName}
+            </h3>
+            <p className="text-xs text-slate-600 max-w-sm leading-relaxed">
+              <strong>{partnerName}</strong> is closed on {activeDay.fullName}, {activeDay.date}. Please select an open weekday above (Monday – Saturday) to reserve your pickup.
+            </p>
+          </div>
+        ) : slotsData.length === 0 ? (
+          <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 flex flex-col items-center justify-center text-center gap-2 my-2">
+            <AlertCircle className="w-6 h-6 text-slate-400" />
+            <span className="text-xs font-bold text-slate-700">No active slots published for this day</span>
+          </div>
+        ) : (
+          /* Time Slots Sections */
+          <div className="flex flex-col gap-4 mt-1">
+            {slotsData.map((section) => {
+              const SectionIcon = section.icon;
+              return (
+                <div key={section.period} className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <SectionIcon className="w-4 h-4 text-[#006a60]" />
+                      <span className="text-sm font-extrabold text-slate-900">{section.period}</span>
+                    </div>
+                    <span className="text-[11px] font-medium text-slate-400">{section.timeRange}</span>
                   </div>
-                  <span className="text-[11px] font-medium text-slate-400">{section.timeRange}</span>
-                </div>
 
-                <div className="grid grid-cols-3 gap-2.5">
-                  {section.slots.map((slot) => {
-                    const isBooked = slot.status === 'Booked';
-                    const isSelected = selectedSlot.time === slot.time;
+                  <div className="grid grid-cols-3 gap-2.5">
+                    {section.slots.map((slot) => {
+                      const isBooked = slot.status === 'Booked';
+                      const isSelected = selectedSlot.time === slot.time && selectedSlot.date.includes(activeDay.name);
 
-                    if (isBooked) {
-                      return (
-                        <div
-                          key={slot.time}
-                          className="bg-slate-100/70 border border-slate-200/80 rounded-2xl py-3 px-2 flex flex-col items-center justify-center select-none cursor-not-allowed opacity-80"
-                        >
-                          <span className="text-xs font-bold text-slate-400 line-through">
-                            {slot.time}
-                          </span>
-                          <span className="text-[10.5px] font-semibold text-rose-500 mt-0.5">
-                            Booked
-                          </span>
-                        </div>
-                      );
-                    }
+                      if (isBooked) {
+                        return (
+                          <div
+                            key={slot.time}
+                            className="bg-slate-100/70 border border-slate-200/80 rounded-2xl py-3 px-2 flex flex-col items-center justify-center select-none cursor-not-allowed opacity-80"
+                          >
+                            <span className="text-xs font-bold text-slate-400 line-through">
+                              {slot.time}
+                            </span>
+                            <span className="text-[10.5px] font-semibold text-rose-500 mt-0.5">
+                              Booked
+                            </span>
+                          </div>
+                        );
+                      }
 
-                    if (isSelected) {
+                      if (isSelected) {
+                        return (
+                          <button
+                            key={slot.time}
+                            onClick={() => handleSelectSlot(slot.time, section.period)}
+                            className="bg-[#006a60] text-white border-2 border-[#006a60] rounded-2xl py-3 px-2 flex flex-col items-center justify-center shadow-md shadow-[#006a60]/20 transition-all scale-[1.02] cursor-pointer"
+                          >
+                            <span className="text-xs font-extrabold leading-tight">
+                              {slot.time}
+                            </span>
+                            <span className="text-[10.5px] font-bold text-teal-100 flex items-center gap-1 mt-0.5">
+                              <Check className="w-3 h-3 stroke-[3]" />
+                              Selected
+                            </span>
+                          </button>
+                        );
+                      }
+
                       return (
                         <button
                           key={slot.time}
                           onClick={() => handleSelectSlot(slot.time, section.period)}
-                          className="bg-[#006a60] text-white border-2 border-[#006a60] rounded-2xl py-3 px-2 flex flex-col items-center justify-center shadow-md shadow-[#006a60]/20 transition-all scale-[1.02]"
+                          className="bg-white border border-[#006a60]/40 hover:border-[#006a60] rounded-2xl py-3 px-2 flex flex-col items-center justify-center transition-all hover:bg-slate-50 shadow-xs cursor-pointer"
                         >
-                          <span className="text-xs font-extrabold leading-tight">
+                          <span className="text-xs font-extrabold text-slate-900 leading-tight">
                             {slot.time}
                           </span>
-                          <span className="text-[10.5px] font-bold text-teal-100 flex items-center gap-1 mt-0.5">
-                            <Check className="w-3 h-3 stroke-[3]" />
-                            Selected
+                          <span className="text-[10.5px] font-semibold text-[#006a60] mt-0.5">
+                            Available
                           </span>
                         </button>
                       );
-                    }
-
-                    return (
-                      <button
-                        key={slot.time}
-                        onClick={() => handleSelectSlot(slot.time, section.period)}
-                        className="bg-white border border-[#006a60]/40 hover:border-[#006a60] rounded-2xl py-3 px-2 flex flex-col items-center justify-center transition-all hover:bg-slate-50 shadow-xs"
-                      >
-                        <span className="text-xs font-extrabold text-slate-900 leading-tight">
-                          {slot.time}
-                        </span>
-                        <span className="text-[10.5px] font-semibold text-[#006a60] mt-0.5">
-                          Available
-                        </span>
-                      </button>
-                    );
-                  })}
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Selected Reservation Banner */}
         <div className="bg-[#f0f6ff] rounded-2xl p-3.5 flex items-center justify-between border border-blue-100 shadow-xs mt-1">

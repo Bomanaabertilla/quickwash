@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Calendar,
   Clock,
@@ -13,167 +13,199 @@ import {
   X,
   RotateCcw,
   Sun,
-  Moon
+  Moon,
+  Send,
+  Eye,
+  AlertCircle,
+  Trash2,
+  ShieldCheck,
+  ArrowRight
 } from 'lucide-react';
+import { getPublishedAvailability, savePublishedAvailability } from '../data/availabilityStore.js';
 
-export default function OwnerWeeklyAvailabilityScreen({ onShowToast }) {
-  const [isConfigured, setIsConfigured] = useState(false);
+export default function OwnerWeeklyAvailabilityScreen({ onShowToast, onPreviewCustomerView }) {
+  // Load initial availability state from storage or default
+  const [availabilityState, setAvailabilityState] = useState(() => getPublishedAvailability());
+  const [isPublished, setIsPublished] = useState(() => availabilityState.isPublished);
+  const [isUnsavedChanges, setIsUnsavedChanges] = useState(false);
+
+  // 7 Days state
+  const [days, setDays] = useState(() => availabilityState.days);
+
+  // Modal for editing a specific day's slots & hours
   const [selectedDayModal, setSelectedDayModal] = useState(null);
+  const [newSlotTime, setNewSlotTime] = useState('11:00 AM');
 
-  // 7 Days for Week of May 25 – May 31, 2026 exactly matching the screenshot
-  const [days, setDays] = useState([
-    { 
-      id: 'mon', 
-      name: 'MON', 
-      month: 'May',
-      dayNum: '25', 
-      fullDate: 'Monday, May 25, 2026', 
-      status: 'Closed', 
-      activeSlots: 0,
-      slots: ['8:00 AM', '10:00 AM', '1:00 PM', '3:30 PM', '5:00 PM'],
-      hours: 'Closed'
-    },
-    { 
-      id: 'tue', 
-      name: 'TUE', 
-      month: 'May',
-      dayNum: '26', 
-      fullDate: 'Tuesday, May 26, 2026', 
-      status: 'Closed', 
-      activeSlots: 0,
-      slots: ['8:00 AM', '10:00 AM', '1:00 PM', '3:30 PM', '5:00 PM'],
-      hours: 'Closed'
-    },
-    { 
-      id: 'wed', 
-      name: 'WED', 
-      month: 'May',
-      dayNum: '27', 
-      fullDate: 'Wednesday, May 27, 2026', 
-      status: 'Closed', 
-      activeSlots: 0,
-      slots: ['8:00 AM', '10:00 AM', '1:00 PM', '3:30 PM', '5:00 PM'],
-      hours: 'Closed'
-    },
-    { 
-      id: 'thu', 
-      name: 'THU', 
-      month: 'May',
-      dayNum: '28', 
-      fullDate: 'Thursday, May 28, 2026', 
-      status: 'Closed', 
-      activeSlots: 0,
-      slots: ['8:00 AM', '10:00 AM', '1:00 PM', '3:30 PM', '5:00 PM'],
-      hours: 'Closed'
-    },
-    { 
-      id: 'fri', 
-      name: 'FRI', 
-      month: 'May',
-      dayNum: '29', 
-      fullDate: 'Friday, May 29, 2026', 
-      status: 'Closed', 
-      activeSlots: 0,
-      slots: ['8:00 AM', '10:00 AM', '1:00 PM', '3:30 PM', '5:00 PM'],
-      hours: 'Closed'
-    },
-    { 
-      id: 'sat', 
-      name: 'SAT', 
-      month: 'May',
-      dayNum: '30', 
-      fullDate: 'Saturday, May 30, 2026', 
-      status: 'Closed', 
-      activeSlots: 0,
-      slots: ['9:00 AM', '11:30 AM', '2:00 PM', '4:30 PM'],
-      hours: 'Closed'
-    },
-    { 
-      id: 'sun', 
-      name: 'SUN', 
-      month: 'May',
-      dayNum: '31', 
-      fullDate: 'Sunday, May 31, 2026', 
-      status: 'Closed', 
-      activeSlots: 0,
-      slots: [],
-      hours: 'Closed'
-    },
-  ]);
+  // Sync to storage on mount
+  useEffect(() => {
+    const current = getPublishedAvailability();
+    if (current && current.days) {
+      setDays(current.days);
+      setIsPublished(current.isPublished);
+    }
+  }, []);
 
   // Action: Copy previous week's schedule
   const handleCopyPreviousWeek = () => {
-    setDays(prev => prev.map(d => {
+    const updated = days.map(d => {
       if (d.id === 'sun') {
-        return { ...d, status: 'Closed', activeSlots: 0, hours: 'Closed' };
+        return {
+          ...d,
+          status: 'Closed',
+          hours: 'Closed',
+          slots: []
+        };
       }
       return {
         ...d,
         status: 'Open',
-        activeSlots: d.id === 'sat' ? 4 : 5,
-        hours: d.id === 'sat' ? '9:00 AM – 5:00 PM' : '8:00 AM – 6:30 PM'
+        hours: d.id === 'sat' ? '9:00 AM – 5:00 PM' : '8:00 AM – 6:30 PM',
+        slots: d.id === 'sat' ? [
+          { time: '9:00 AM', period: 'Morning', status: 'Available', capacity: 4 },
+          { time: '11:30 AM', period: 'Morning', status: 'Available', capacity: 4 },
+          { time: '2:00 PM', period: 'Afternoon', status: 'Available', capacity: 4 },
+          { time: '4:30 PM', period: 'Evening', status: 'Available', capacity: 4 }
+        ] : [
+          { time: '8:00 AM', period: 'Morning', status: 'Available', capacity: 5 },
+          { time: '10:00 AM', period: 'Morning', status: 'Available', capacity: 5 },
+          { time: '1:00 PM', period: 'Afternoon', status: 'Available', capacity: 5 },
+          { time: '3:30 PM', period: 'Afternoon', status: 'Available', capacity: 5 },
+          { time: '5:00 PM', period: 'Evening', status: 'Available', capacity: 5 }
+        ]
       };
-    }));
-    setIsConfigured(true);
-    if (onShowToast) onShowToast('Copied May 18–24 schedule (6 operating days, 29 intake slots)');
+    });
+    setDays(updated);
+    setIsUnsavedChanges(true);
+    if (onShowToast) onShowToast('Copied May 18–24 schedule. Click "Publish Availability" to push live to customers.');
   };
 
   // Action: Set standard hours
   const handleSetStandardHours = () => {
-    setDays(prev => prev.map(d => {
+    const updated = days.map(d => {
       if (d.id === 'sun') {
-        return { ...d, status: 'Closed', activeSlots: 0, hours: 'Closed' };
+        return { ...d, status: 'Closed', hours: 'Closed', slots: [] };
       }
       return {
         ...d,
         status: 'Open',
-        activeSlots: 5,
-        hours: '8:00 AM – 6:00 PM'
+        hours: '8:00 AM – 6:00 PM',
+        slots: [
+          { time: '8:00 AM', period: 'Morning', status: 'Available', capacity: 5 },
+          { time: '10:00 AM', period: 'Morning', status: 'Available', capacity: 5 },
+          { time: '1:00 PM', period: 'Afternoon', status: 'Available', capacity: 5 },
+          { time: '3:30 PM', period: 'Afternoon', status: 'Available', capacity: 5 },
+          { time: '5:00 PM', period: 'Evening', status: 'Available', capacity: 5 }
+        ]
       };
-    }));
-    setIsConfigured(true);
-    if (onShowToast) onShowToast('Standard hours set: Monday to Saturday (8:00 AM – 6:00 PM)');
+    });
+    setDays(updated);
+    setIsUnsavedChanges(true);
+    if (onShowToast) onShowToast('Standard hours configured (Mon–Sat 8:00 AM – 6:00 PM)');
   };
 
-  // Action: Toggle day status or open editor
+  // Action: Toggle single day open/closed
   const handleToggleDay = (dayId) => {
-    setDays(prev => {
-      const next = prev.map(d => {
-        if (d.id === dayId) {
-          const willOpen = d.status === 'Closed';
-          return {
-            ...d,
-            status: willOpen ? 'Open' : 'Closed',
-            activeSlots: willOpen ? (d.id === 'sat' ? 4 : 5) : 0,
-            hours: willOpen ? '8:00 AM – 6:30 PM' : 'Closed'
-          };
-        }
-        return d;
-      });
-      const anyOpen = next.some(d => d.status === 'Open');
-      setIsConfigured(anyOpen);
-      return next;
+    const next = days.map(d => {
+      if (d.id === dayId) {
+        const willOpen = d.status === 'Closed';
+        return {
+          ...d,
+          status: willOpen ? 'Open' : 'Closed',
+          hours: willOpen ? '8:00 AM – 6:30 PM' : 'Closed',
+          slots: willOpen ? [
+            { time: '8:00 AM', period: 'Morning', status: 'Available', capacity: 5 },
+            { time: '10:00 AM', period: 'Morning', status: 'Available', capacity: 5 },
+            { time: '1:00 PM', period: 'Afternoon', status: 'Available', capacity: 5 },
+            { time: '3:30 PM', period: 'Afternoon', status: 'Available', capacity: 5 },
+            { time: '5:00 PM', period: 'Evening', status: 'Available', capacity: 5 }
+          ] : []
+        };
+      }
+      return d;
+    });
+    setDays(next);
+    setIsUnsavedChanges(true);
+  };
+
+  // Action: Publish schedule live to marketplace and customer storefront
+  const handlePublishSchedule = () => {
+    const payload = {
+      isPublished: true,
+      weekRange: 'May 25 – May 31, 2026',
+      weekLabel: 'Week of May 25 – May 31, 2026',
+      days: days
+    };
+    savePublishedAvailability(payload);
+    setIsPublished(true);
+    setIsUnsavedChanges(false);
+    if (onShowToast) onShowToast('✅ Published weekly availability! Customers can now book open pickup slots.');
+  };
+
+  // Action: Unpublish / Reset schedule to offline blueprint
+  const handleUnpublishSchedule = () => {
+    const closedDays = days.map(d => ({
+      ...d,
+      status: 'Closed',
+      hours: 'Closed',
+      slots: []
+    }));
+    setDays(closedDays);
+    const payload = {
+      isPublished: false,
+      weekRange: 'May 25 – May 31, 2026',
+      weekLabel: 'Week of May 25 – May 31, 2026',
+      days: closedDays
+    };
+    savePublishedAvailability(payload);
+    setIsPublished(false);
+    setIsUnsavedChanges(false);
+    if (onShowToast) onShowToast('Unpublished schedule. Intake is now offline.');
+  };
+
+  // Handle saving customized day slots from modal
+  const handleSaveDayModal = (e) => {
+    e.preventDefault();
+    if (!selectedDayModal) return;
+    setDays(prev => prev.map(d => d.id === selectedDayModal.id ? selectedDayModal : d));
+    setIsUnsavedChanges(true);
+    setSelectedDayModal(null);
+    if (onShowToast) onShowToast(`Updated ${selectedDayModal.fullName} slots & hours`);
+  };
+
+  const handleAddSlotToModal = () => {
+    if (!newSlotTime.trim() || !selectedDayModal) return;
+    const existing = selectedDayModal.slots || [];
+    if (existing.some(s => s.time === newSlotTime)) {
+      if (onShowToast) onShowToast('Slot already exists for this day');
+      return;
+    }
+    const newSlot = {
+      time: newSlotTime,
+      period: newSlotTime.includes('AM') ? 'Morning' : 'Afternoon',
+      status: 'Available',
+      capacity: 5
+    };
+    setSelectedDayModal({
+      ...selectedDayModal,
+      slots: [...existing, newSlot]
+    });
+    setNewSlotTime('');
+  };
+
+  const handleRemoveSlotFromModal = (slotTime) => {
+    if (!selectedDayModal) return;
+    setSelectedDayModal({
+      ...selectedDayModal,
+      slots: selectedDayModal.slots.filter(s => s.time !== slotTime)
     });
   };
 
-  // Reset to unpublished empty blueprint
-  const handleReset = () => {
-    setDays(prev => prev.map(d => ({
-      ...d,
-      status: 'Closed',
-      activeSlots: 0,
-      hours: 'Closed'
-    })));
-    setIsConfigured(false);
-    if (onShowToast) onShowToast('Reset schedule to unconfigured blueprint');
-  };
-
   const totalOpenDays = days.filter(d => d.status === 'Open').length;
-  const totalSlots = days.reduce((acc, d) => acc + d.activeSlots, 0);
+  const totalSlots = days.reduce((acc, d) => acc + (d.slots ? d.slots.length : 0), 0);
   const totalOperatingHours = totalOpenDays * 10;
 
   return (
-    <div className="flex-1 flex flex-col bg-[#FAF9F5] text-slate-800 pb-20 overflow-y-auto">
+    <div className="flex-1 flex flex-col bg-[#FAF9F5] text-slate-800 pb-28 overflow-y-auto">
       
       {/* Sub-Header Breadcrumbs & Navigation Bar */}
       <div className="px-6 lg:px-10 pt-6 pb-4 flex flex-wrap items-start justify-between gap-4">
@@ -188,11 +220,24 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast }) {
             <span className="text-[#008276] font-semibold">Weekly availability</span>
           </div>
 
-          <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Weekly availability
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight">
+              Weekly availability
+            </h1>
+            {isPublished && totalOpenDays > 0 ? (
+              <span className="bg-emerald-50 text-emerald-700 text-xs font-bold px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>PUBLISHED TO MARKETPLACE</span>
+              </span>
+            ) : (
+              <span className="bg-amber-50 text-amber-700 text-xs font-bold px-2.5 py-0.5 rounded-full border border-amber-200 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                <span>UNPUBLISHED (DRAFT)</span>
+              </span>
+            )}
+          </div>
           <p className="text-xs sm:text-sm text-slate-500 font-normal mt-1">
-            Manage booking intake caps and time window capacity across the week.
+            Manage booking intake caps, open time windows, and publish your live slots so customers can book on their app.
           </p>
         </div>
 
@@ -203,7 +248,7 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast }) {
           <div className="flex items-center bg-white border border-slate-200 rounded-2xl px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-800 shadow-2xs gap-3">
             <button 
               onClick={() => onShowToast && onShowToast('Previous week: May 18 – May 24, 2026')}
-              className="p-0.5 hover:text-slate-600 text-slate-400 transition-colors"
+              className="p-0.5 hover:text-slate-600 text-slate-400 transition-colors cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -211,7 +256,7 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast }) {
             <span className="tracking-tight">Week of May 25 – May 31, 2026</span>
             <button 
               onClick={() => onShowToast && onShowToast('Next week: Jun 1 – Jun 7, 2026')}
-              className="p-0.5 hover:text-slate-600 text-slate-400 transition-colors"
+              className="p-0.5 hover:text-slate-600 text-slate-400 transition-colors cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -220,23 +265,19 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast }) {
           {/* This Week Button */}
           <button 
             onClick={() => onShowToast && onShowToast('Viewing current calendar week')}
-            className="px-4 py-2 bg-[#dce6f5] hover:bg-[#d0ddf0] text-[#2c538a] rounded-2xl text-xs sm:text-sm font-bold transition-colors"
+            className="px-4 py-2 bg-[#dce6f5] hover:bg-[#d0ddf0] text-[#2c538a] rounded-2xl text-xs sm:text-sm font-bold transition-colors cursor-pointer"
           >
             This week
           </button>
 
-          {/* Status Badge: Unpublished / Published */}
-          {isConfigured ? (
-            <span className="bg-emerald-50 text-emerald-700 text-xs font-bold px-3.5 py-1.5 rounded-full border border-emerald-200 flex items-center gap-1.5 shadow-2xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span>Published</span>
-            </span>
-          ) : (
-            <span className="bg-[#fde8e8] text-[#c53030] text-xs font-bold px-3.5 py-1.5 rounded-full border border-[#fbd5d5] flex items-center gap-1.5 shadow-2xs">
-              <span className="w-2 h-2 rounded-full bg-[#e53e3e]"></span>
-              <span>Unpublished</span>
-            </span>
-          )}
+          {/* Publish Availability CTA Button */}
+          <button
+            onClick={handlePublishSchedule}
+            className="bg-[#008276] hover:bg-[#007065] text-white px-4 py-2 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all shadow-xs cursor-pointer active:scale-98"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Publish Availability</span>
+          </button>
 
         </div>
 
@@ -245,7 +286,7 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast }) {
       {/* Main Content Area */}
       <div className="px-6 lg:px-10 max-w-7xl mx-auto w-full flex flex-col gap-8 mt-2">
         
-        {/* Hero Card: No availability set for this week */}
+        {/* Hero Card: No availability set / Configured state */}
         <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs p-6 lg:p-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
           
           {/* Left Column */}
@@ -259,13 +300,17 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast }) {
 
             {/* Title */}
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              {isConfigured ? 'Schedule configured for this week' : 'No availability set for this week'}
+              {totalOpenDays > 0 
+                ? (isPublished ? 'Weekly schedule is live for customers' : 'Availability configured (Ready to publish)')
+                : 'No availability set for this week'}
             </h2>
 
             {/* Description */}
             <p className="text-xs sm:text-sm text-slate-500 font-normal leading-relaxed">
-              {isConfigured
-                ? `You have opened ${totalOpenDays} operating days with ${totalSlots} booking slots. Customers can choose pickup times during these windows.`
+              {totalOpenDays > 0
+                ? (isPublished 
+                    ? `Your ${totalOpenDays} open operating days and ${totalSlots} pickup slots are live on the customer storefront. Customers in Accra Central can book these time windows.`
+                    : `You have configured ${totalOpenDays} days with ${totalSlots} slots. Click "Publish Availability" below to sync with customer storefronts.`)
                 : 'Set your operating slots and delivery capacity to start taking customer bookings, or quickly duplicate last week\'s schedule.'}
             </p>
 
@@ -273,7 +318,7 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast }) {
             <div className="flex items-center gap-3.5 pt-2 flex-wrap">
               <button
                 onClick={handleCopyPreviousWeek}
-                className="bg-[#005a52] hover:bg-[#004a43] text-white px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2.5 shadow-xs transition-all active:scale-[0.98]"
+                className="bg-[#005a52] hover:bg-[#004a43] text-white px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2.5 shadow-xs transition-all active:scale-[0.98] cursor-pointer"
               >
                 <Sparkles className="w-4 h-4 text-teal-200" />
                 <span>Copy Previous Week's Schedule</span>
@@ -290,13 +335,13 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast }) {
                 <span>Set Standard Hours</span>
               </button>
 
-              {isConfigured && (
+              {totalOpenDays > 0 && (
                 <button
-                  onClick={handleReset}
+                  onClick={handleUnpublishSchedule}
                   className="text-rose-600 hover:text-rose-800 text-xs font-bold px-2 py-1 flex items-center gap-1.5 cursor-pointer ml-auto"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset to Closed</span>
+                  <span>Unpublish / Reset All</span>
                 </button>
               )}
             </div>
@@ -311,12 +356,18 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast }) {
             </div>
 
             <h3 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
-              {isConfigured ? `${totalOperatingHours} Hours Configured` : '0 Hours Configured'}
+              {totalOpenDays > 0 ? `${totalOperatingHours} Hours Configured` : '0 Hours Configured'}
             </h3>
 
             <p className="text-xs text-slate-400 font-medium mt-1">
-              {isConfigured ? `${totalSlots} intake slots active` : 'Intake currently offline'}
+              {totalOpenDays > 0 ? `${totalSlots} active pickup slots` : 'Intake currently offline'}
             </p>
+
+            {isPublished && totalOpenDays > 0 && (
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md mt-2 flex items-center gap-1">
+                <Check className="w-3 h-3" /> Live on Customer App
+              </span>
+            )}
 
           </div>
 
@@ -333,18 +384,18 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast }) {
               </h3>
               
               <span className={`text-xs font-bold px-3 py-0.5 rounded-full border ${
-                isConfigured && totalOpenDays > 0
+                totalOpenDays > 0
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                   : 'bg-slate-100 text-slate-600 border-slate-200'
               }`}>
-                {isConfigured && totalOpenDays > 0 
-                  ? `${totalOpenDays} of 7 Days Open` 
+                {totalOpenDays > 0 
+                  ? `${totalOpenDays} of 7 Days Open (${totalSlots} Slots)` 
                   : 'All Days Closed'}
               </span>
             </div>
 
             <span className="text-xs text-slate-400 font-normal">
-              Select a day to open booking slots
+              Click any day card or "Adjust slots" to customize pickup time windows
             </span>
           </div>
 
@@ -352,11 +403,12 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3.5">
             {days.map((day) => {
               const isOpen = day.status === 'Open';
+              const slotCount = day.slots ? day.slots.length : 0;
 
               return (
                 <div
                   key={day.id}
-                  onClick={() => handleToggleDay(day.id)}
+                  onClick={() => setSelectedDayModal({ ...day })}
                   className={`bg-white rounded-2xl border p-4 sm:p-5 flex flex-col justify-between min-h-[220px] transition-all cursor-pointer shadow-2xs hover:shadow-sm ${
                     isOpen
                       ? 'border-[#008276] ring-2 ring-[#008276]/15 bg-gradient-to-b from-white to-teal-50/25'
@@ -395,7 +447,7 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast }) {
                       {isOpen ? (
                         <div className="flex flex-col gap-1">
                           <span className="text-xs font-bold text-[#008276]">
-                            {day.activeSlots} active slots
+                            {slotCount} active slots
                           </span>
                           <span className="text-[11px] text-slate-500 font-medium leading-tight">
                             {day.hours}
@@ -413,13 +465,17 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast }) {
                   <div className="pt-3 border-t border-slate-100/80 mt-4">
                     <button
                       type="button"
-                      className={`w-full py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleDay(day.id);
+                      }}
+                      className={`w-full py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
                         isOpen
                           ? 'bg-teal-50 text-[#008276] hover:bg-teal-100'
                           : 'bg-[#eef3f9] text-slate-600 hover:bg-[#e2eaf4]'
                       }`}
                     >
-                      <span>{isOpen ? 'Adjust slots' : '+ Open day'}</span>
+                      <span>{isOpen ? 'Close day' : '+ Open day'}</span>
                     </button>
                   </div>
 
@@ -431,6 +487,187 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast }) {
         </div>
 
       </div>
+
+      {/* Floating Bottom Publishing Action Bar */}
+      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 bg-white/95 backdrop-blur-md rounded-3xl border border-slate-200/90 shadow-2xl p-4 flex items-center gap-4 flex-wrap max-w-2xl w-[92%] justify-between">
+        <div className="flex items-center gap-3">
+          <div className={`w-3 h-3 rounded-full ${isPublished && totalOpenDays > 0 ? 'bg-emerald-500 animate-ping' : 'bg-amber-400'}`} />
+          <div>
+            <span className="text-xs font-black text-slate-900 block">
+              {isPublished && totalOpenDays > 0 
+                ? 'Marketplace Live: Customers can book these slots' 
+                : (totalOpenDays > 0 ? 'Draft updates pending publish' : 'Intake currently offline')}
+            </span>
+            <span className="text-[11px] text-slate-500 font-medium">
+              {totalOpenDays} days open • {totalSlots} pickup windows configured
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handlePublishSchedule}
+            className="bg-[#008276] hover:bg-[#007065] text-white px-5 py-2.5 rounded-2xl text-xs font-extrabold flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Publish to Customers</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Edit Day Slots Modal Dialog */}
+      {selectedDayModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-[999] animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-base text-slate-900">
+                    {selectedDayModal.fullName}, {selectedDayModal.date}
+                  </h3>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    selectedDayModal.status === 'Open' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
+                  }`}>
+                    {selectedDayModal.status}
+                  </span>
+                </div>
+                <span className="text-[11px] text-slate-400 font-medium">
+                  Configure operating windows and customer pickup slots
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedDayModal(null)}
+                className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDayModal} className="flex flex-col gap-4 text-xs font-medium">
+              
+              {/* Day Open/Close Toggle */}
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                <span className="font-bold text-slate-800">Store Status for {selectedDayModal.name}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const willOpen = selectedDayModal.status === 'Closed';
+                    setSelectedDayModal({
+                      ...selectedDayModal,
+                      status: willOpen ? 'Open' : 'Closed',
+                      hours: willOpen ? '8:00 AM – 6:30 PM' : 'Closed',
+                      slots: willOpen && (!selectedDayModal.slots || selectedDayModal.slots.length === 0) ? [
+                        { time: '8:00 AM', period: 'Morning', status: 'Available', capacity: 5 },
+                        { time: '10:00 AM', period: 'Morning', status: 'Available', capacity: 5 },
+                        { time: '1:00 PM', period: 'Afternoon', status: 'Available', capacity: 5 },
+                        { time: '4:00 PM', period: 'Evening', status: 'Available', capacity: 5 }
+                      ] : selectedDayModal.slots
+                    });
+                  }}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold cursor-pointer transition-colors ${
+                    selectedDayModal.status === 'Open'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-300 text-slate-700'
+                  }`}
+                >
+                  {selectedDayModal.status === 'Open' ? 'Open for Bookings' : 'Closed'}
+                </button>
+              </div>
+
+              {selectedDayModal.status === 'Open' && (
+                <>
+                  {/* Operating Hours */}
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Operating Hours Display</label>
+                    <input
+                      type="text"
+                      value={selectedDayModal.hours}
+                      onChange={(e) => setSelectedDayModal({ ...selectedDayModal, hours: e.target.value })}
+                      placeholder="e.g. 8:00 AM – 6:30 PM"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-bold focus:outline-none focus:border-[#008276]"
+                    />
+                  </div>
+
+                  {/* Active Pickup Slot Time Windows */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="font-bold text-slate-700">Pickup Time Windows</label>
+                      <span className="text-[11px] text-[#008276] font-bold">
+                        {selectedDayModal.slots ? selectedDayModal.slots.length : 0} slots
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                      {selectedDayModal.slots && selectedDayModal.slots.map((slot) => (
+                        <div
+                          key={slot.time}
+                          className="flex items-center justify-between bg-slate-50 border border-slate-200/80 p-2.5 rounded-xl text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-3.5 h-3.5 text-[#008276]" />
+                            <span className="font-bold text-slate-900">{slot.time}</span>
+                            <span className="text-[10.5px] text-slate-400">({slot.capacity || 5} orders max)</span>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSlotFromModal(slot.time)}
+                            className="text-slate-400 hover:text-rose-500 p-1 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Add Slot row */}
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        type="text"
+                        placeholder="e.g. 2:30 PM"
+                        value={newSlotTime}
+                        onChange={(e) => setNewSlotTime(e.target.value)}
+                        className="flex-1 px-3 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-[#008276]"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddSlotToModal}
+                        className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-[#008276] rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                      >
+                        + Add Slot
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDayModal(null)}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#008276] hover:bg-[#007065] text-white rounded-xl text-xs font-extrabold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <Check className="w-4 h-4 text-teal-200" />
+                  <span>Save Day Settings</span>
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );
