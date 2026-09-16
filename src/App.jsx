@@ -34,7 +34,7 @@ export default function App() {
   });
 
   const [selectedPartnerId, setSelectedPartnerId] = useState('sparkle');
-  const [scheduledTime, setScheduledTime] = useState('Mon, May 25 (10:00 AM)');
+  const [scheduledTime, setScheduledTime] = useState('Today (Immediate)');
   const [totalAmount, setTotalAmount] = useState('235.00');
   const [selectedServices, setSelectedServices] = useState([]);
   const [selectedNetwork, setSelectedNetwork] = useState('mtn');

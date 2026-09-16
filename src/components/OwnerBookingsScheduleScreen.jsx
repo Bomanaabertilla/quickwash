@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { getOrders, saveOrders, updateOrderStatus, syncOrdersWithBackend } from '../data/ordersStore';
 import { getPublishedAvailability } from '../data/availabilityStore';
-import { formatDashboardHeaderDate, formatOrderTimestamp, formatCurrency, getTodayDayId, parseSlot } from '../utils/dateUtils';
+import { formatDashboardHeaderDate, formatOrderTimestamp, formatCurrency, getTodayDayId, parseSlot, getCalendarWeek } from '../utils/dateUtils';
 
 export default function OwnerBookingsScheduleScreen({ onShowToast }) {
   // Filters & State
@@ -38,8 +38,10 @@ export default function OwnerBookingsScheduleScreen({ onShowToast }) {
   const [selectedOrderId, setSelectedOrderId] = useState(() => orders[0]?.id || null);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [availability, setAvailability] = useState(() => getPublishedAvailability());
+  const [weekOffset, setWeekOffset] = useState(0);
 
   const todayDayId = getTodayDayId();
+  const currentCalendarWeek = useMemo(() => getCalendarWeek(new Date(), weekOffset), [weekOffset]);
 
   useEffect(() => {
     // Sync fresh orders from backend on mount
@@ -82,29 +84,31 @@ export default function OwnerBookingsScheduleScreen({ onShowToast }) {
     return orders.find(o => o.id === selectedOrderId) || orders[0] || null;
   }, [orders, selectedOrderId]);
 
-  // Days list for column matrix - dynamically derived from published schedule
+  // Days list for column matrix - dynamically derived from published schedule and current calendar week
   const daysList = useMemo(() => {
+    const calDays = currentCalendarWeek.days;
     if (availability.days && availability.days.length > 0) {
       // Exclude Sunday if closed or keep 6 operating days (Mon-Sat)
       return availability.days
         .filter(d => d.id !== 'sun' || d.status !== 'Closed')
-        .map(d => ({
-          id: d.id,
-          name: d.name,
-          fullName: d.fullName,
-          date: d.date || d.dayNum || '',
-          isToday: d.id === todayDayId
-        }));
+        .map(d => {
+          const calDay = calDays.find(c => c.id === d.id);
+          return {
+            id: d.id,
+            name: d.name,
+            fullName: d.fullName,
+            date: calDay?.date || d.date || d.dayNum || '',
+            isToday: weekOffset === 0 && d.id === todayDayId
+          };
+        });
     }
-    return [
-      { id: 'mon', name: 'Mon', date: 'Mon', isToday: todayDayId === 'mon' },
-      { id: 'tue', name: 'Tue', date: 'Tue', isToday: todayDayId === 'tue' },
-      { id: 'wed', name: 'Wed', date: 'Wed', isToday: todayDayId === 'wed' },
-      { id: 'thu', name: 'Thu', date: 'Thu', isToday: todayDayId === 'thu' },
-      { id: 'fri', name: 'Fri', date: 'Fri', isToday: todayDayId === 'fri' },
-      { id: 'sat', name: 'Sat', date: 'Sat', isToday: todayDayId === 'sat' }
-    ];
-  }, [availability, todayDayId]);
+    return calDays.filter(d => d.id !== 'sun').map(d => ({
+      id: d.id,
+      name: d.name,
+      date: d.date,
+      isToday: weekOffset === 0 && d.id === todayDayId
+    }));
+  }, [availability, currentCalendarWeek, todayDayId, weekOffset]);
 
   // Time slots for row matrix - includes immediate walk-ins and store pickup slots
   const timeSlots = useMemo(() => {
@@ -225,22 +229,42 @@ export default function OwnerBookingsScheduleScreen({ onShowToast }) {
         {/* Date Navigator */}
         <div className="flex items-center gap-2.5 flex-wrap">
           <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-xl border border-stone-200">
-            <button className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white text-stone-600 transition-colors">
+            <button 
+              onClick={() => {
+                setWeekOffset(prev => prev - 1);
+                if (onShowToast) onShowToast('Switched to previous week');
+              }}
+              title="Previous Week"
+              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white text-stone-600 transition-colors cursor-pointer"
+            >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <div className="flex items-center gap-1.5 px-2 font-extrabold text-xs text-stone-800">
               <CalendarIcon className="w-3.5 h-3.5 text-[#0D6352]" />
-              <span>{availability.weekRange || 'Active Store Week'}</span>
+              <span>{currentCalendarWeek.weekRange}</span>
               <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-md">
                 Live Storefront Schedule
               </span>
             </div>
-            <button className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white text-stone-600 transition-colors">
+            <button 
+              onClick={() => {
+                setWeekOffset(prev => prev + 1);
+                if (onShowToast) onShowToast('Switched to next week');
+              }}
+              title="Next Week"
+              className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white text-stone-600 transition-colors cursor-pointer"
+            >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
-          <button className="bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold px-3 py-1.5 rounded-xl text-xs transition-colors border border-stone-200">
+          <button 
+            onClick={() => {
+              setWeekOffset(0);
+              if (onShowToast) onShowToast('Returned to current week');
+            }}
+            className="bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold px-3 py-1.5 rounded-xl text-xs transition-colors border border-stone-200 cursor-pointer"
+          >
             Jump to today
           </button>
         </div>

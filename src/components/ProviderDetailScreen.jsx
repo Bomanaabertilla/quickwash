@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { getPublishedAvailability } from '../data/availabilityStore.js';
 import { getShopProfile } from '../data/shopStore.js';
+import { getTodayDayId } from '../utils/dateUtils.js';
 
 export default function ProviderDetailScreen({
   partner,
@@ -34,11 +35,16 @@ export default function ProviderDetailScreen({
 }) {
   const [shopProfile, setShopProfile] = useState(() => getShopProfile());
   const [publishedSchedule, setPublishedSchedule] = useState(() => getPublishedAvailability());
-  const [selectedDateId, setSelectedDateId] = useState('tue');
-  const [selectedSlot, setSelectedSlot] = useState({
-    time: '1:30 PM',
-    date: 'Tue May 26',
-    period: 'Afternoon'
+  const todayDayId = getTodayDayId();
+  const [selectedDateId, setSelectedDateId] = useState(todayDayId);
+  const [selectedSlot, setSelectedSlot] = useState(() => {
+    const today = publishedSchedule.days?.find(d => d.id === todayDayId) || publishedSchedule.days?.[0];
+    const firstSlot = today?.slots?.[0] || { time: '10:00 AM', period: 'Morning' };
+    return {
+      time: firstSlot.time,
+      date: `${today?.name || 'Today'} ${today?.date || ''}`,
+      period: firstSlot.period
+    };
   });
   const [isRetrying, setIsRetrying] = useState(false);
 

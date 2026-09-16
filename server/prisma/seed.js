@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { getCalendarWeek } from '../src/utils/dateUtils.js';
 
 const prisma = new PrismaClient();
 
@@ -116,25 +117,32 @@ async function main() {
   }
 
   // 3. Seed Availability Schedule
+  const calWeek = getCalendarWeek();
   const week = await prisma.availabilityWeek.upsert({
     where: { id: 'current' },
-    update: {},
+    update: {
+      isPublished: true,
+      weekRange: calWeek.weekRange,
+      weekLabel: calWeek.weekLabel
+    },
     create: {
       id: 'current',
       isPublished: true,
-      weekRange: 'May 25 – May 31, 2026',
-      weekLabel: 'Week of May 25 – May 31, 2026'
+      weekRange: calWeek.weekRange,
+      weekLabel: calWeek.weekLabel
     }
   });
+
+  const getDayMeta = (id) => calWeek.days.find(d => d.id === id);
 
   const daysData = [
     {
       id: 'mon',
       name: 'Mon',
       fullName: 'Monday',
-      date: 'May 25',
-      month: 'May',
-      dayNum: '25',
+      date: getDayMeta('mon').date,
+      month: getDayMeta('mon').month,
+      dayNum: getDayMeta('mon').dayNum,
       status: 'Open',
       hours: '8:00 AM – 6:30 PM',
       sortOrder: 1,
@@ -150,9 +158,9 @@ async function main() {
       id: 'tue',
       name: 'Tue',
       fullName: 'Tuesday',
-      date: 'May 26',
-      month: 'May',
-      dayNum: '26',
+      date: getDayMeta('tue').date,
+      month: getDayMeta('tue').month,
+      dayNum: getDayMeta('tue').dayNum,
       status: 'Open',
       hours: '8:00 AM – 6:30 PM',
       sortOrder: 2,
@@ -168,9 +176,9 @@ async function main() {
       id: 'wed',
       name: 'Wed',
       fullName: 'Wednesday',
-      date: 'May 27',
-      month: 'May',
-      dayNum: '27',
+      date: getDayMeta('wed').date,
+      month: getDayMeta('wed').month,
+      dayNum: getDayMeta('wed').dayNum,
       status: 'Open',
       hours: '8:00 AM – 6:30 PM',
       sortOrder: 3,
@@ -186,9 +194,9 @@ async function main() {
       id: 'thu',
       name: 'Thu',
       fullName: 'Thursday',
-      date: 'May 28',
-      month: 'May',
-      dayNum: '28',
+      date: getDayMeta('thu').date,
+      month: getDayMeta('thu').month,
+      dayNum: getDayMeta('thu').dayNum,
       status: 'Open',
       hours: '8:00 AM – 6:30 PM',
       sortOrder: 4,
@@ -204,9 +212,9 @@ async function main() {
       id: 'fri',
       name: 'Fri',
       fullName: 'Friday',
-      date: 'May 29',
-      month: 'May',
-      dayNum: '29',
+      date: getDayMeta('fri').date,
+      month: getDayMeta('fri').month,
+      dayNum: getDayMeta('fri').dayNum,
       status: 'Open',
       hours: '8:00 AM – 6:30 PM',
       sortOrder: 5,
@@ -222,9 +230,9 @@ async function main() {
       id: 'sat',
       name: 'Sat',
       fullName: 'Saturday',
-      date: 'May 30',
-      month: 'May',
-      dayNum: '30',
+      date: getDayMeta('sat').date,
+      month: getDayMeta('sat').month,
+      dayNum: getDayMeta('sat').dayNum,
       status: 'Open',
       hours: '9:00 AM – 5:00 PM',
       sortOrder: 6,
@@ -239,9 +247,9 @@ async function main() {
       id: 'sun',
       name: 'Sun',
       fullName: 'Sunday',
-      date: 'May 31',
-      month: 'May',
-      dayNum: '31',
+      date: getDayMeta('sun').date,
+      month: getDayMeta('sun').month,
+      dayNum: getDayMeta('sun').dayNum,
       status: 'Closed',
       hours: 'Closed',
       sortOrder: 7,

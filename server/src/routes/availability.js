@@ -1,5 +1,6 @@
 import express from 'express';
 import prisma from '../config/db.js';
+import { getCalendarWeek } from '../utils/dateUtils.js';
 
 const router = express.Router();
 
@@ -24,7 +25,24 @@ router.get('/', async (req, res) => {
       return res.status(404).json({ error: 'Availability schedule not found' });
     }
 
-    res.json(week);
+    const cal = getCalendarWeek();
+    const alignedDays = week.days.map((d) => {
+      const match = cal.days.find((c) => c.id === d.id);
+      if (!match) return d;
+      return {
+        ...d,
+        date: match.date,
+        month: match.month,
+        dayNum: match.dayNum
+      };
+    });
+
+    res.json({
+      ...week,
+      weekRange: cal.weekRange,
+      weekLabel: cal.weekLabel,
+      days: alignedDays
+    });
   } catch (error) {
     console.error('Error fetching availability:', error);
     res.status(500).json({ error: 'Failed to fetch availability', details: error.message });
@@ -34,10 +52,11 @@ router.get('/', async (req, res) => {
 // PUT /api/availability - Update weekly schedule and slot capacities
 router.put('/', async (req, res) => {
   try {
+    const cal = getCalendarWeek();
     const {
       isPublished = true,
-      weekRange = 'May 25 – May 31, 2026',
-      weekLabel = 'Week of May 25 – May 31, 2026',
+      weekRange = cal.weekRange,
+      weekLabel = cal.weekLabel,
       days = []
     } = req.body;
 

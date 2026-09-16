@@ -17,22 +17,70 @@ export function formatDashboardHeaderDate(date = new Date()) {
 }
 
 /**
- * Returns current week range label
- * Example output: "Week of 14 Sep – 20 Sep 2026"
+ * Calculates current calendar week dates, day labels, and week range strings.
+ * Defaults to current week based on system date.
+ * If weekOffset is provided (e.g. -1 for prev week, +1 for next week), it shifts the week accordingly.
  */
-export function getCurrentWeekLabel(date = new Date()) {
-  const d = new Date(date);
-  const dayOfWeek = d.getDay(); // 0 is Sunday
-  // Distance to Monday (1)
+export function getCalendarWeek(refDate = new Date(), weekOffset = 0) {
+  const d = new Date(refDate);
+  d.setDate(d.getDate() + (weekOffset * 7));
+  const dayOfWeek = d.getDay(); // 0 is Sunday, 1 is Monday...
   const diffToMon = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek;
+  
   const monday = new Date(d);
   monday.setDate(d.getDate() + diffToMon);
+
+  const dayMeta = [
+    { id: 'mon', name: 'Mon', fullName: 'Monday' },
+    { id: 'tue', name: 'Tue', fullName: 'Tuesday' },
+    { id: 'wed', name: 'Wed', fullName: 'Wednesday' },
+    { id: 'thu', name: 'Thu', fullName: 'Thursday' },
+    { id: 'fri', name: 'Fri', fullName: 'Friday' },
+    { id: 'sat', name: 'Sat', fullName: 'Saturday' },
+    { id: 'sun', name: 'Sun', fullName: 'Sunday' }
+  ];
+
+  const days = dayMeta.map((m, idx) => {
+    const cur = new Date(monday);
+    cur.setDate(monday.getDate() + idx);
+    const month = cur.toLocaleDateString('en-US', { month: 'short' });
+    const dayNum = cur.getDate();
+    return {
+      ...m,
+      date: `${month} ${dayNum}`,
+      month,
+      dayNum: String(dayNum),
+      fullDateStr: cur.toISOString().split('T')[0]
+    };
+  });
 
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
 
-  const formatShort = (dt) => dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-  return `Week of ${formatShort(monday)} – ${formatShort(sunday)} ${sunday.getFullYear()}`;
+  const startMonth = monday.toLocaleDateString('en-US', { month: 'short' });
+  const endMonth = sunday.toLocaleDateString('en-US', { month: 'short' });
+  const startDay = monday.getDate();
+  const endDay = sunday.getDate();
+  const year = sunday.getFullYear();
+
+  const weekRange = `${startMonth} ${startDay} – ${endMonth} ${endDay}, ${year}`;
+  const weekLabel = `Week of ${weekRange}`;
+
+  return {
+    weekRange,
+    weekLabel,
+    monday,
+    sunday,
+    days
+  };
+}
+
+/**
+ * Returns current week range label
+ * Example output: "Week of Sep 14 – Sep 20, 2026"
+ */
+export function getCurrentWeekLabel(date = new Date()) {
+  return getCalendarWeek(date).weekLabel;
 }
 
 /**

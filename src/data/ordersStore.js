@@ -1,4 +1,5 @@
 // Shared Store for Customer Orders & Owner Hub Fulfillment with Backend Synchronization
+import { getTodayDayId } from '../utils/dateUtils';
 
 const STORAGE_KEY = 'quickwash_orders_data';
 
@@ -8,8 +9,8 @@ export const INITIAL_ORDERS = [
     customerName: 'Alex Morgan',
     phone: '+233 24 123 4567',
     tier: 'Loyal Customer',
-    slot: 'Mon May 25 (10:00 AM)',
-    day: 'mon',
+    slot: 'Today (10:00 AM)',
+    day: getTodayDayId(),
     timeKey: '10:00 AM',
     status: 'Confirmed',
     summary: 'Wash & Fold 5kg + Steam Iron (2 pcs)',

@@ -63,7 +63,8 @@ router.post('/', async (req, res) => {
       customerName = 'Customer',
       phone = '+233 24 123 4567',
       address = 'Plot 14B, Ring Road Central, Accra',
-      slot = 'Mon May 25 (10:00 AM)',
+      slot = 'Today (Immediate)',
+      timeSlotId,
       day,
       timeKey,
       services = [],
@@ -120,7 +121,11 @@ router.post('/', async (req, res) => {
     const result = await prisma.$transaction(async (tx) => {
       let matchedSlot = null;
 
-      if (resolvedDay && resolvedTime) {
+      if (timeSlotId) {
+        matchedSlot = await tx.timeSlot.findUnique({
+          where: { id: Number(timeSlotId) }
+        });
+      } else if (resolvedDay && resolvedTime) {
         matchedSlot = await tx.timeSlot.findFirst({
           where: {
             dayId: resolvedDay,

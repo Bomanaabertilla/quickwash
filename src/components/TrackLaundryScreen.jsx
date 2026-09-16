@@ -456,7 +456,7 @@ export default function TrackLaundryScreen({
                   <Clock className="w-4 h-4 text-slate-400" />
                   <span>Scheduled slot</span>
                 </div>
-                <span className="font-extrabold text-slate-900">{currentOrder?.slot || scheduledTime || 'Mon, May 25 • 10:00 AM'}</span>
+                <span className="font-extrabold text-slate-900">{currentOrder?.slot || scheduledTime || 'Today (Immediate)'}</span>
               </div>
 
               <div className="flex items-center justify-between">

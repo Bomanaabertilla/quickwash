@@ -22,7 +22,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { getPublishedAvailability, savePublishedAvailability } from '../data/availabilityStore.js';
-import { getCurrentWeekLabel } from '../utils/dateUtils.js';
+import { getCurrentWeekLabel, getCalendarWeek } from '../utils/dateUtils.js';
 
 export default function OwnerWeeklyAvailabilityScreen({ onShowToast, onPreviewCustomerView }) {
   // Load initial availability state from storage or default
@@ -130,11 +130,20 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast, onPreviewCu
 
   // Action: Publish schedule live to marketplace and customer storefront
   const handlePublishSchedule = () => {
+    const weekInfo = getCalendarWeek();
     const payload = {
       isPublished: true,
-      weekRange: 'May 25 – May 31, 2026',
-      weekLabel: 'Week of May 25 – May 31, 2026',
-      days: days
+      weekRange: weekInfo.weekRange,
+      weekLabel: weekInfo.weekLabel,
+      days: days.map(d => {
+        const calDay = weekInfo.days.find(c => c.id === d.id);
+        return {
+          ...d,
+          date: calDay?.date || d.date,
+          month: calDay?.month || d.month,
+          dayNum: calDay?.dayNum || d.dayNum
+        };
+      })
     };
     savePublishedAvailability(payload);
     setIsPublished(true);
@@ -144,17 +153,24 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast, onPreviewCu
 
   // Action: Unpublish / Reset schedule to offline blueprint
   const handleUnpublishSchedule = () => {
-    const closedDays = days.map(d => ({
-      ...d,
-      status: 'Closed',
-      hours: 'Closed',
-      slots: []
-    }));
+    const weekInfo = getCalendarWeek();
+    const closedDays = days.map(d => {
+      const calDay = weekInfo.days.find(c => c.id === d.id);
+      return {
+        ...d,
+        date: calDay?.date || d.date,
+        month: calDay?.month || d.month,
+        dayNum: calDay?.dayNum || d.dayNum,
+        status: 'Closed',
+        hours: 'Closed',
+        slots: []
+      };
+    });
     setDays(closedDays);
     const payload = {
       isPublished: false,
-      weekRange: 'May 25 – May 31, 2026',
-      weekLabel: 'Week of May 25 – May 31, 2026',
+      weekRange: weekInfo.weekRange,
+      weekLabel: weekInfo.weekLabel,
       days: closedDays
     };
     savePublishedAvailability(payload);
@@ -248,7 +264,7 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast, onPreviewCu
           {/* Week Selector Box */}
           <div className="flex items-center bg-white border border-slate-200 rounded-2xl px-3.5 py-2 text-xs sm:text-sm font-bold text-slate-800 shadow-2xs gap-3">
             <button 
-              onClick={() => onShowToast && onShowToast('Previous week: May 18 – May 24, 2026')}
+              onClick={() => onShowToast && onShowToast(`Previous week: ${getCalendarWeek(new Date(), -1).weekRange}`)}
               className="p-0.5 hover:text-slate-600 text-slate-400 transition-colors cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -256,7 +272,7 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast, onPreviewCu
             <Calendar className="w-4 h-4 text-[#008276]" />
             <span className="tracking-tight">{availabilityState.weekRange || getCurrentWeekLabel()}</span>
             <button 
-              onClick={() => onShowToast && onShowToast('Next week: Jun 1 – Jun 7, 2026')}
+              onClick={() => onShowToast && onShowToast(`Next week: ${getCalendarWeek(new Date(), 1).weekRange}`)}
               className="p-0.5 hover:text-slate-600 text-slate-400 transition-colors cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />

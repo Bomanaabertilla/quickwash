@@ -61,7 +61,7 @@ export default function ServicesScreen({
   }, [catalog, quantities]);
 
   const partnerDisplayName = partner?.name?.replace(' Laundry', '') || 'Sparkle Express';
-  const displaySchedule = scheduledTime || 'Mon, May 25 (10:00 AM)';
+  const displaySchedule = scheduledTime || 'Today (Immediate)';
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f7f9fc]">
