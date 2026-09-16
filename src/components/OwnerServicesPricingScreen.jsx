@@ -19,14 +19,17 @@ import {
   Info,
   ChevronRight,
   Search,
-  Filter
+  Filter,
+  X
 } from 'lucide-react';
 
 export default function OwnerServicesPricingScreen({ onShowToast }) {
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingService, setEditingService] = useState(null);
+  
+  // Modal Edit / Create State
+  const [modalService, setModalService] = useState(null);
+  const [isNewService, setIsNewService] = useState(false);
 
   // Initial full services catalog data
   const [services, setServices] = useState([
@@ -165,8 +168,50 @@ export default function OwnerServicesPricingScreen({ onShowToast }) {
     }));
   };
 
-  const handleQuickPriceChange = (id, newPrice) => {
-    setServices(prev => prev.map(s => s.id === id ? { ...s, price: newPrice } : s));
+  const handleOpenEdit = (service) => {
+    setModalService({ ...service });
+    setIsNewService(false);
+  };
+
+  const handleOpenAdd = () => {
+    setModalService({
+      id: Date.now(),
+      name: '',
+      category: activeCategory !== 'All' ? activeCategory : 'Wash & Fold',
+      description: '',
+      unit: 'per kg',
+      price: '40.00',
+      turnaround: '24 hrs',
+      minOrder: '1 item',
+      popular: false,
+      active: true,
+      iconName: 'shirt'
+    });
+    setIsNewService(true);
+  };
+
+  const handleSaveModal = (e) => {
+    e.preventDefault();
+    if (!modalService.name.trim()) {
+      if (onShowToast) onShowToast('Please enter a service name');
+      return;
+    }
+
+    if (isNewService) {
+      setServices([modalService, ...services]);
+      if (onShowToast) onShowToast(`Added "${modalService.name}" to service catalog`);
+    } else {
+      setServices(prev => prev.map(s => s.id === modalService.id ? modalService : s));
+      if (onShowToast) onShowToast(`Updated "${modalService.name}" details & rates`);
+    }
+
+    setModalService(null);
+  };
+
+  const handleDeleteFromModal = (id) => {
+    setServices(prev => prev.filter(s => s.id !== id));
+    if (onShowToast) onShowToast(`Removed "${modalService.name}" from catalog`);
+    setModalService(null);
   };
 
   const handleToggleAddon = (id) => {
@@ -204,25 +249,8 @@ export default function OwnerServicesPricingScreen({ onShowToast }) {
           </div>
 
           <button
-            onClick={() => {
-              const newId = Date.now();
-              const newService = {
-                id: newId,
-                name: 'Express Sneaker Spa',
-                category: 'Specialty',
-                description: 'Midsole touch-up and quick deodorizing spray.',
-                unit: 'per pair',
-                price: '55.00',
-                turnaround: '24 hrs',
-                minOrder: '1 pair',
-                popular: false,
-                active: true,
-                iconName: 'sparkles'
-              };
-              setServices([newService, ...services]);
-              if (onShowToast) onShowToast('Added "Express Sneaker Spa" to active catalog');
-            }}
-            className="bg-[#008276] hover:bg-[#007065] text-white px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all shadow-xs"
+            onClick={handleOpenAdd}
+            className="bg-[#008276] hover:bg-[#007065] text-white px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all shadow-xs cursor-pointer active:scale-98"
           >
             <Plus className="w-4 h-4" />
             <span>+ Add New Service</span>
@@ -294,7 +322,7 @@ export default function OwnerServicesPricingScreen({ onShowToast }) {
               <button
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
-                className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all whitespace-nowrap ${
+                className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                   activeCategory === cat
                     ? 'bg-[#008276] text-white shadow-xs'
                     : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
@@ -315,6 +343,14 @@ export default function OwnerServicesPricingScreen({ onShowToast }) {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#008276]"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -375,9 +411,13 @@ export default function OwnerServicesPricingScreen({ onShowToast }) {
 
               {/* Price & Turnaround Row */}
               <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
+                <div 
+                  onClick={() => handleOpenEdit(service)}
+                  className="flex items-center gap-1.5 cursor-pointer group"
+                  title="Click to edit service rate"
+                >
                   <span className="text-xs text-slate-400 font-bold">Rate:</span>
-                  <div className="flex items-baseline gap-1 bg-teal-50/70 border border-teal-100 px-3 py-1.5 rounded-xl font-bold">
+                  <div className="flex items-baseline gap-1 bg-teal-50/70 group-hover:bg-teal-100/80 border border-teal-100 px-3 py-1.5 rounded-xl font-bold transition-colors">
                     <span className="text-base font-black text-[#008276]">
                       GH₵ {service.price}
                     </span>
@@ -394,15 +434,10 @@ export default function OwnerServicesPricingScreen({ onShowToast }) {
                   </span>
 
                   <button
-                    onClick={() => {
-                      const newPrice = prompt(`Enter new rate for ${service.name} (GH₵):`, service.price);
-                      if (newPrice && !isNaN(newPrice)) {
-                        handleQuickPriceChange(service.id, parseFloat(newPrice).toFixed(2));
-                        if (onShowToast) onShowToast(`Updated ${service.name} rate to GH₵ ${newPrice}`);
-                      }
-                    }}
-                    className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
-                    title="Edit price"
+                    type="button"
+                    onClick={() => handleOpenEdit(service)}
+                    className="p-2 hover:bg-teal-50 hover:text-[#008276] text-slate-500 rounded-xl transition-all border border-transparent hover:border-teal-200 cursor-pointer shadow-2xs"
+                    title="Edit full service details"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
@@ -465,6 +500,191 @@ export default function OwnerServicesPricingScreen({ onShowToast }) {
         </div>
 
       </div>
+
+      {/* Edit / Add Service Modal Dialog */}
+      {modalService && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 z-[999] animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 p-6 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-teal-50 text-[#008276] flex items-center justify-center">
+                  <Tag className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">
+                    {isNewService ? 'Add New Service' : `Edit ${modalService.name}`}
+                  </h3>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    Configure customer rates and turnaround commitments
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setModalService(null)}
+                className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSaveModal} className="flex flex-col gap-4 text-xs font-medium">
+              
+              {/* Service Name */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Service Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Wash & Fold, Suit Dry Cleaning..."
+                  value={modalService.name}
+                  onChange={(e) => setModalService({ ...modalService, name: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-bold focus:outline-none focus:border-[#008276]"
+                />
+              </div>
+
+              {/* Category & Pricing Unit */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Category</label>
+                  <select
+                    value={modalService.category}
+                    onChange={(e) => setModalService({ ...modalService, category: e.target.value })}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-bold focus:outline-none focus:border-[#008276] cursor-pointer"
+                  >
+                    <option value="Wash & Fold">Wash &amp; Fold</option>
+                    <option value="Dry Clean & Press">Dry Clean &amp; Press</option>
+                    <option value="Bulky & Household">Bulky &amp; Household</option>
+                    <option value="Specialty">Specialty</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Pricing Unit</label>
+                  <select
+                    value={modalService.unit}
+                    onChange={(e) => setModalService({ ...modalService, unit: e.target.value })}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-bold focus:outline-none focus:border-[#008276] cursor-pointer"
+                  >
+                    <option value="per kg">per kg (weight)</option>
+                    <option value="per item">per item (piece)</option>
+                    <option value="per piece">per piece (bulky)</option>
+                    <option value="per pair">per pair (shoes)</option>
+                    <option value="per set">per set (outfit)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Unit Rate & Turnaround */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Unit Rate (GH₵)</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.50"
+                      min="1"
+                      required
+                      value={modalService.price}
+                      onChange={(e) => setModalService({ ...modalService, price: e.target.value })}
+                      className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono text-slate-900 font-extrabold focus:outline-none focus:border-[#008276]"
+                    />
+                    <span className="absolute left-3 top-2.5 text-slate-400 font-bold">GH₵</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Turnaround Time</label>
+                  <select
+                    value={modalService.turnaround}
+                    onChange={(e) => setModalService({ ...modalService, turnaround: e.target.value })}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-bold focus:outline-none focus:border-[#008276] cursor-pointer"
+                  >
+                    <option value="4-6 hrs">4-6 hrs (Express Rush)</option>
+                    <option value="12 hrs">12 hrs (Same Day)</option>
+                    <option value="24 hrs">24 hrs (Standard)</option>
+                    <option value="48 hrs">48 hrs (Delicate / Dry Clean)</option>
+                    <option value="72 hrs">72 hrs (Bulky Drapes)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Customer Description</label>
+                <textarea
+                  rows="2"
+                  placeholder="Describe garments, washing process, detergent, packaging..."
+                  value={modalService.description}
+                  onChange={(e) => setModalService({ ...modalService, description: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 font-normal focus:outline-none focus:border-[#008276]"
+                />
+              </div>
+
+              {/* Toggles */}
+              <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-200">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={modalService.popular}
+                    onChange={(e) => setModalService({ ...modalService, popular: e.target.checked })}
+                    className="w-4 h-4 accent-[#008276]"
+                  />
+                  <span className="text-xs font-bold text-slate-700">Show "Popular" Tag</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={modalService.active}
+                    onChange={(e) => setModalService({ ...modalService, active: e.target.checked })}
+                    className="w-4 h-4 accent-[#008276]"
+                  />
+                  <span className="text-xs font-bold text-slate-700">Active on Catalog</span>
+                </label>
+              </div>
+
+              {/* Modal Action Buttons */}
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100 mt-2">
+                {!isNewService ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteFromModal(modalService.id)}
+                    className="text-rose-600 hover:text-rose-700 text-xs font-bold flex items-center gap-1 p-1 cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete Service</span>
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setModalService(null)}
+                    className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 bg-[#008276] hover:bg-[#007065] text-white rounded-xl text-xs font-extrabold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4 text-teal-200" />
+                    <span>Save Changes</span>
+                  </button>
+                </div>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );
