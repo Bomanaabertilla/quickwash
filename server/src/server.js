@@ -3,6 +3,11 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import prisma from './config/db.js';
 
+import ordersRouter from './routes/orders.js';
+import availabilityRouter from './routes/availability.js';
+import servicesRouter from './routes/services.js';
+import shopRouter from './routes/shop.js';
+
 dotenv.config();
 
 const app = express();
@@ -21,7 +26,6 @@ app.use((req, res, next) => {
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
   try {
-    // Quick DB query to verify connection
     const shop = await prisma.shopProfile.findFirst();
     res.json({
       status: 'ok',
@@ -40,83 +44,11 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Shop Profile
-app.get('/api/shop', async (req, res) => {
-  try {
-    let shop = await prisma.shopProfile.findUnique({ where: { id: 'sparkle' } });
-    if (!shop) {
-      shop = await prisma.shopProfile.findFirst();
-    }
-    if (!shop) {
-      return res.status(404).json({ error: 'Shop profile not found' });
-    }
-    // Parse JSON facilities
-    const formatted = {
-      ...shop,
-      facilities: typeof shop.facilities === 'string' ? JSON.parse(shop.facilities) : shop.facilities
-    };
-    res.json(formatted);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Services Catalog
-app.get('/api/services', async (req, res) => {
-  try {
-    const services = await prisma.service.findMany({
-      orderBy: { id: 'asc' }
-    });
-    res.json(services);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Weekly Availability & Slots
-app.get('/api/availability', async (req, res) => {
-  try {
-    const week = await prisma.availabilityWeek.findFirst({
-      where: { id: 'current' },
-      include: {
-        days: {
-          orderBy: { sortOrder: 'asc' },
-          include: {
-            slots: {
-              orderBy: { id: 'asc' }
-            }
-          }
-        }
-      }
-    });
-
-    if (!week) {
-      return res.status(404).json({ error: 'Availability not configured' });
-    }
-
-    res.json(week);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Orders
-app.get('/api/orders', async (req, res) => {
-  try {
-    const orders = await prisma.order.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: {
-        items: true,
-        history: {
-          orderBy: { orderIndex: 'asc' }
-        }
-      }
-    });
-    res.json(orders);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// Modular Domain Routers
+app.use('/api/orders', ordersRouter);
+app.use('/api/availability', availabilityRouter);
+app.use('/api/services', servicesRouter);
+app.use('/api/shop', shopRouter);
 
 // 404 handler
 app.use((req, res) => {

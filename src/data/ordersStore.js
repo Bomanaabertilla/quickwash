@@ -1,4 +1,4 @@
-// Shared Store for Customer Orders & Owner Hub Fulfillment
+// Shared Store for Customer Orders & Owner Hub Fulfillment with Backend Synchronization
 
 const STORAGE_KEY = 'quickwash_orders_data';
 
@@ -58,6 +58,25 @@ export function saveOrders(orders) {
   }
 }
 
+// Fetch latest orders from the backend API
+export async function syncOrdersWithBackend() {
+  if (typeof window === 'undefined') return;
+  try {
+    const res = await fetch('/api/orders');
+    if (res.ok) {
+      const orders = await res.json();
+      if (Array.isArray(orders) && orders.length > 0) {
+        saveOrders(orders);
+        return orders;
+      }
+    }
+  } catch (err) {
+    // Backend offline or unreachable; gracefully fallback to cached storage
+    console.warn('Orders API not reachable, using cached orders store:', err.message);
+  }
+  return getOrders();
+}
+
 export function createOrder({
   customerName = 'Customer',
   phone = '+233 24 123 4567',
@@ -105,8 +124,44 @@ export function createOrder({
     ]
   };
 
+  // 1. Optimistic local update
   const updated = [newOrder, ...current];
   saveOrders(updated);
+
+  // 2. Persist to backend API asynchronously
+  fetch('/api/orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      customerName,
+      phone,
+      address,
+      slot,
+      day: slot.toLowerCase().slice(0, 3),
+      timeKey: slot,
+      services,
+      amount,
+      paymentMethod,
+      specialNotes,
+      partnerName
+    })
+  })
+    .then(async (res) => {
+      if (res.ok) {
+        const serverOrder = await res.json();
+        // Replace optimistic order with server order
+        const fresh = getOrders().map(o => (o.id === newId ? serverOrder : o));
+        saveOrders(fresh);
+      } else if (res.status === 409) {
+        const errorData = await res.json();
+        console.error('Booking conflict:', errorData.error);
+        window.dispatchEvent(new CustomEvent('quickwash:booking_conflict', { detail: errorData }));
+      }
+    })
+    .catch((err) => {
+      console.warn('Backend sync failed, order saved locally:', err.message);
+    });
+
   return newOrder;
 }
 
@@ -140,7 +195,26 @@ export function updateOrderStatus(orderId, newStatus, extraNotes) {
     };
   });
 
+  // 1. Optimistic local update
   saveOrders(updated);
+
+  // 2. Persist to backend API asynchronously
+  fetch(`/api/orders/${orderId}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: newStatus, extraNotes })
+  })
+    .then(async (res) => {
+      if (res.ok) {
+        const serverOrder = await res.json();
+        const fresh = getOrders().map(o => (o.id === orderId ? serverOrder : o));
+        saveOrders(fresh);
+      }
+    })
+    .catch((err) => {
+      console.warn('Backend status update failed, updated locally:', err.message);
+    });
+
   return updated.find(o => o.id === orderId);
 }
 
@@ -152,4 +226,10 @@ export function getOrderById(orderId) {
 export function getLatestOrder() {
   const current = getOrders();
   return current[0] || null;
+}
+
+// Auto-sync on client load and window focus
+if (typeof window !== 'undefined') {
+  syncOrdersWithBackend();
+  window.addEventListener('focus', () => syncOrdersWithBackend());
 }

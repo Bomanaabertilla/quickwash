@@ -1,4 +1,4 @@
-// Shared Store for Published Owner Availability & Customer Storefront Sync
+// Shared Store for Published Owner Availability & Customer Storefront Sync with Backend
 
 const STORAGE_KEY = 'quickwash_published_availability';
 
@@ -137,6 +137,25 @@ export function getPublishedAvailability() {
   return DEFAULT_AVAILABILITY;
 }
 
+// Helper: Fetch availability from backend API
+export async function syncAvailabilityWithBackend() {
+  if (typeof window === 'undefined') return;
+  try {
+    const res = await fetch('/api/availability');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.days) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        window.dispatchEvent(new CustomEvent('quickwash:availability_updated', { detail: data }));
+        return data;
+      }
+    }
+  } catch (err) {
+    console.warn('Availability API not reachable, using cached schedule:', err.message);
+  }
+  return getPublishedAvailability();
+}
+
 // Helper: Save and broadcast availability
 export function savePublishedAvailability(data) {
   if (typeof window === 'undefined') return;
@@ -145,9 +164,34 @@ export function savePublishedAvailability(data) {
       ...data,
       updatedAt: new Date().toISOString()
     };
+    // 1. Optimistic update
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     window.dispatchEvent(new CustomEvent('quickwash:availability_updated', { detail: payload }));
+
+    // 2. Persist to backend API asynchronously
+    fetch('/api/availability', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const fresh = await res.json();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+        }
+      })
+      .catch((err) => {
+        console.warn('Backend availability sync failed, saved locally:', err.message);
+      });
+
+    return payload;
   } catch (e) {
     console.error('Error saving availability to storage', e);
   }
+}
+
+// Auto-sync on client load and window focus
+if (typeof window !== 'undefined') {
+  syncAvailabilityWithBackend();
+  window.addEventListener('focus', () => syncAvailabilityWithBackend());
 }

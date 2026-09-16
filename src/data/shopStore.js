@@ -1,4 +1,4 @@
-// Shared Store for Store/Shop Profile Configuration
+// Shared Store for Store/Shop Profile Configuration with Backend Sync
 
 const STORAGE_KEY = 'quickwash_shop_profile';
 
@@ -43,6 +43,26 @@ export function getShopProfile() {
   return DEFAULT_SHOP_PROFILE;
 }
 
+// Fetch shop profile from backend API
+export async function syncShopProfileWithBackend() {
+  if (typeof window === 'undefined') return;
+  try {
+    const res = await fetch('/api/shop');
+    if (res.ok) {
+      const shop = await res.json();
+      if (shop && shop.id) {
+        const payload = { ...DEFAULT_SHOP_PROFILE, ...shop };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        window.dispatchEvent(new CustomEvent('quickwash:shop_updated', { detail: payload }));
+        return payload;
+      }
+    }
+  } catch (err) {
+    console.warn('Shop API not reachable, using cached profile:', err.message);
+  }
+  return getShopProfile();
+}
+
 export function saveShopProfile(data) {
   if (typeof window === 'undefined') return;
   try {
@@ -51,10 +71,34 @@ export function saveShopProfile(data) {
       ...data,
       updatedAt: new Date().toISOString()
     };
+    // 1. Optimistic update
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     window.dispatchEvent(new CustomEvent('quickwash:shop_updated', { detail: payload }));
+
+    // 2. Persist to backend API asynchronously
+    fetch('/api/shop', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const fresh = await res.json();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+        }
+      })
+      .catch((err) => {
+        console.warn('Backend shop sync failed, saved locally:', err.message);
+      });
+
     return payload;
   } catch (e) {
     console.error('Error saving shop profile to storage', e);
   }
+}
+
+// Auto-sync on client load and window focus
+if (typeof window !== 'undefined') {
+  syncShopProfileWithBackend();
+  window.addEventListener('focus', () => syncShopProfileWithBackend());
 }

@@ -1,4 +1,4 @@
-// Shared Store for Services & Pricing Catalog
+// Shared Store for Services & Pricing Catalog with Backend Sync
 
 const STORAGE_KEY = 'quickwash_services_catalog';
 
@@ -83,13 +83,56 @@ export function getServicesCatalog() {
   return DEFAULT_SERVICES;
 }
 
+// Fetch services from backend API
+export async function syncServicesWithBackend() {
+  if (typeof window === 'undefined') return;
+  try {
+    const res = await fetch('/api/services');
+    if (res.ok) {
+      const services = await res.json();
+      if (Array.isArray(services) && services.length > 0) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(services));
+        window.dispatchEvent(new CustomEvent('quickwash:services_updated', { detail: services }));
+        return services;
+      }
+    }
+  } catch (err) {
+    console.warn('Services API not reachable, using cached catalog:', err.message);
+  }
+  return getServicesCatalog();
+}
+
 export function saveServicesCatalog(services) {
   if (typeof window === 'undefined') return;
   try {
+    // 1. Optimistic update
     localStorage.setItem(STORAGE_KEY, JSON.stringify(services));
     window.dispatchEvent(new CustomEvent('quickwash:services_updated', { detail: services }));
+
+    // 2. Persist to backend API asynchronously
+    fetch('/api/services', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(services)
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const fresh = await res.json();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+        }
+      })
+      .catch((err) => {
+        console.warn('Backend services sync failed, saved locally:', err.message);
+      });
+
     return services;
   } catch (e) {
     console.error('Error saving services catalog to storage', e);
   }
+}
+
+// Auto-sync on client load and window focus
+if (typeof window !== 'undefined') {
+  syncServicesWithBackend();
+  window.addEventListener('focus', () => syncServicesWithBackend());
 }
