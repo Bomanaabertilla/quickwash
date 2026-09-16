@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Store, 
   TrendingUp, 
@@ -23,7 +23,8 @@ import OwnerProfileSetupScreen from './OwnerProfileSetupScreen.jsx';
 import OwnerServicesPricingScreen from './OwnerServicesPricingScreen.jsx';
 import OwnerShopProfileScreen from './OwnerShopProfileScreen.jsx';
 
-import { createOrder } from '../data/ordersStore';
+import { createOrder, getOrders, syncOrdersWithBackend } from '../data/ordersStore';
+import { formatDashboardHeaderDate, formatCurrency } from '../utils/dateUtils';
 
 export default function OwnerDashboardScreen({
   onBackToApp,
@@ -36,11 +37,44 @@ export default function OwnerDashboardScreen({
       const params = new URLSearchParams(window.location.search);
       if (params.get('tab')) return params.get('tab');
     }
-    return 'weekly-availability';
+    return 'bookings';
   });
   const [storeStatus, setStoreStatus] = useState('open');
   const [toastMsg, setToastMsg] = useState(null);
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
+  const [orders, setOrders] = useState(() => getOrders());
+
+  // Listen to order updates and sync with backend on mount
+  useEffect(() => {
+    syncOrdersWithBackend().then((latest) => {
+      if (latest && latest.length > 0) {
+        setOrders(latest);
+      }
+    });
+
+    const handleOrdersUpdate = (e) => {
+      if (e.detail) {
+        setOrders(e.detail);
+      } else {
+        setOrders(getOrders());
+      }
+    };
+
+    window.addEventListener('quickwash:orders_updated', handleOrdersUpdate);
+    return () => window.removeEventListener('quickwash:orders_updated', handleOrdersUpdate);
+  }, []);
+
+  // Live calculated metrics
+  const activeOrdersCount = orders.filter(
+    (o) => o.status !== 'Ready / Delivered' && o.status !== 'Cancelled'
+  ).length;
+  const inProgressCount = orders.filter(
+    (o) => o.status === 'In progress' || o.status === 'In wash'
+  ).length;
+  const totalRevenue = orders.reduce(
+    (sum, o) => sum + (parseFloat(o.amount) || 0),
+    0
+  );
 
   // Walk-in form state
   const [walkInName, setWalkInName] = useState('');
@@ -62,11 +96,12 @@ export default function OwnerDashboardScreen({
       return;
     }
 
+    const timeNow = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
     createOrder({
       customerName: walkInName.trim(),
       phone: walkInPhone.trim() || '+233 24 000 0000',
       address: 'Walk-In Customer (In-Store Dropoff)',
-      slot: 'Today (Immediate)',
+      slot: `Today (${timeNow})`,
       services: [{ name: walkInService, price: walkInAmount }],
       amount: walkInAmount,
       paymentMethod: 'Cash / In-Store POS',
@@ -77,6 +112,7 @@ export default function OwnerDashboardScreen({
     setIsWalkInModalOpen(false);
     setWalkInName('');
     setWalkInPhone('');
+    setActiveNav('bookings');
   };
 
   return (
@@ -143,7 +179,16 @@ export default function OwnerDashboardScreen({
                   : 'text-slate-700 hover:bg-slate-200/60 hover:text-slate-900'
               }`}
             >
-              <span>Bookings & Schedule</span>
+              <div className="flex items-center gap-2">
+                <span>Bookings & Schedule</span>
+                {orders.length > 0 && (
+                  <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-full ${
+                    activeNav === 'bookings' ? 'bg-white text-[#008276]' : 'bg-[#008276] text-white'
+                  }`}>
+                    {orders.length}
+                  </span>
+                )}
+              </div>
               <Calendar className="w-4 h-4 ml-2" />
             </button>
 
@@ -264,21 +309,29 @@ export default function OwnerDashboardScreen({
             </span>
 
             <span className="text-xs sm:text-sm font-bold text-slate-700">
-              Thursday, 24 Oct
+              {formatDashboardHeaderDate()}
             </span>
 
             {/* Metrics Pills */}
             <div className="flex items-center gap-2">
-              <span className="bg-[#dce6f5] text-[#2c538a] text-xs font-bold px-3 py-1.5 rounded-xl">
-                14 Active Today
+              <span
+                onClick={() => setActiveNav('bookings')}
+                className="bg-[#dce6f5] hover:bg-[#ccdcf2] text-[#2c538a] text-xs font-bold px-3 py-1.5 rounded-xl cursor-pointer transition-colors"
+                title="View active bookings"
+              >
+                {activeOrdersCount} Active
+              </span>
+
+              <span
+                onClick={() => setActiveNav('bookings')}
+                className="bg-[#dce6f5] hover:bg-[#ccdcf2] text-[#2c538a] text-xs font-bold px-3 py-1.5 rounded-xl cursor-pointer transition-colors"
+                title="View in progress bookings"
+              >
+                {inProgressCount} In Progress
               </span>
 
               <span className="bg-[#dce6f5] text-[#2c538a] text-xs font-bold px-3 py-1.5 rounded-xl">
-                3 In Progress
-              </span>
-
-              <span className="bg-[#dce6f5] text-[#2c538a] text-xs font-bold px-3 py-1.5 rounded-xl">
-                GH₵ 4,280 Revenue
+                {formatCurrency(totalRevenue)} Revenue
               </span>
             </div>
           </div>

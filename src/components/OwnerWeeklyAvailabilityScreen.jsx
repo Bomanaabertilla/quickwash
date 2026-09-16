@@ -22,6 +22,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { getPublishedAvailability, savePublishedAvailability } from '../data/availabilityStore.js';
+import { getCurrentWeekLabel } from '../utils/dateUtils.js';
 
 export default function OwnerWeeklyAvailabilityScreen({ onShowToast, onPreviewCustomerView }) {
   // Load initial availability state from storage or default
@@ -76,7 +77,7 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast, onPreviewCu
     });
     setDays(updated);
     setIsUnsavedChanges(true);
-    if (onShowToast) onShowToast('Copied May 18–24 schedule. Click "Publish Availability" to push live to customers.');
+    if (onShowToast) onShowToast('Copied schedule. Click "Publish Availability" to push live to customers.');
   };
 
   // Action: Set standard hours
@@ -253,7 +254,7 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast, onPreviewCu
               <ChevronLeft className="w-4 h-4" />
             </button>
             <Calendar className="w-4 h-4 text-[#008276]" />
-            <span className="tracking-tight">Week of May 25 – May 31, 2026</span>
+            <span className="tracking-tight">{availabilityState.weekRange || getCurrentWeekLabel()}</span>
             <button 
               onClick={() => onShowToast && onShowToast('Next week: Jun 1 – Jun 7, 2026')}
               className="p-0.5 hover:text-slate-600 text-slate-400 transition-colors cursor-pointer"
@@ -295,7 +296,7 @@ export default function OwnerWeeklyAvailabilityScreen({ onShowToast, onPreviewCu
             {/* Pill */}
             <div className="inline-flex items-center gap-2 bg-[#edf2f9] text-[#33557d] text-xs font-bold px-3.5 py-1 rounded-full w-fit">
               <span className="w-1.5 h-1.5 rounded-full bg-[#33557d]"></span>
-              <span>Upcoming Week • May 25 – May 31</span>
+              <span>Upcoming Week • {availabilityState.weekRange || getCurrentWeekLabel()}</span>
             </div>
 
             {/* Title */}

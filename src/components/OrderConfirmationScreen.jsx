@@ -12,6 +12,7 @@ import {
   Radio,
   CheckCircle2
 } from 'lucide-react';
+import { formatCurrency } from '../utils/dateUtils';
 
 export default function OrderConfirmationScreen({
   partner,
@@ -164,7 +165,7 @@ export default function OrderConfirmationScreen({
                 <span>Pickup Date & Time</span>
               </div>
               <span className="font-extrabold text-slate-900 text-[12.5px]">
-                {scheduledTime || 'Tue, May 13 · 1:30 PM'}
+                {scheduledTime || 'Today (Immediate)'}
               </span>
             </div>
 
@@ -174,7 +175,7 @@ export default function OrderConfirmationScreen({
                 <span>Amount Paid</span>
               </div>
               <span className="font-extrabold text-[#006a60] text-[15px]">
-                GH₵ {totalAmount}
+                {formatCurrency(totalAmount)}
               </span>
             </div>
           </div>

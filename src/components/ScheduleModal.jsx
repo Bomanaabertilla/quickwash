@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 import { getPublishedAvailability } from '../data/availabilityStore';
+import { getTodayDayId } from '../utils/dateUtils';
 
 export default function ScheduleModal({ isOpen, onClose, partnerName, onConfirm }) {
   const [availability, setAvailability] = useState(getPublishedAvailability());
-  const [selectedDayId, setSelectedDayId] = useState('mon');
+  const [selectedDayId, setSelectedDayId] = useState(() => getTodayDayId() || 'mon');
   const [selectedTime, setSelectedTime] = useState('');
 
   useEffect(() => {

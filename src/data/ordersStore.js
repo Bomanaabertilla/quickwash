@@ -77,6 +77,8 @@ export async function syncOrdersWithBackend() {
   return getOrders();
 }
 
+import { parseSlot } from '../utils/dateUtils.js';
+
 export function createOrder({
   customerName = 'Customer',
   phone = '+233 24 123 4567',
@@ -92,6 +94,10 @@ export function createOrder({
   const randomNum = Math.floor(1000 + Math.random() * 9000);
   const newId = `LB-2026-${randomNum}`;
 
+  const parsed = parseSlot(slot);
+  const orderDay = parsed.dayId;
+  const orderTimeKey = parsed.timeKey;
+
   const summary = services.length > 0
     ? services.map(s => s.name).join(' + ')
     : 'Custom Laundry Service';
@@ -102,8 +108,8 @@ export function createOrder({
     phone,
     tier: 'New Booking',
     slot,
-    day: slot.toLowerCase().slice(0, 3),
-    timeKey: slot,
+    day: orderDay,
+    timeKey: orderTimeKey,
     status: 'Confirmed',
     summary,
     amount,
@@ -137,8 +143,8 @@ export function createOrder({
       phone,
       address,
       slot,
-      day: slot.toLowerCase().slice(0, 3),
-      timeKey: slot,
+      day: orderDay,
+      timeKey: orderTimeKey,
       services,
       amount,
       paymentMethod,

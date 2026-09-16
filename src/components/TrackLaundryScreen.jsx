@@ -21,6 +21,7 @@ import {
   PackageCheck
 } from 'lucide-react';
 import { getOrders, getOrderById, getLatestOrder } from '../data/ordersStore';
+import { formatCurrency } from '../utils/dateUtils';
 
 export default function TrackLaundryScreen({
   partner,
@@ -43,6 +44,16 @@ export default function TrackLaundryScreen({
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [hasLookedUp, setHasLookedUp] = useState(true);
   const [toastText, setToastText] = useState(null);
+
+  useEffect(() => {
+    if (bookingReference) {
+      const cleanRef = bookingReference.replace(/\s+/g, '');
+      setSearchCode(cleanRef);
+      const all = getOrders();
+      const match = all.find(o => o.id === cleanRef);
+      if (match) setCurrentOrder(match);
+    }
+  }, [bookingReference]);
 
   useEffect(() => {
     const handleUpdate = (e) => {
@@ -463,7 +474,7 @@ export default function TrackLaundryScreen({
                 </div>
                 <div className="flex flex-col items-end">
                   <span className="text-sm font-extrabold text-[#006a60]">
-                    GH₵ {currentOrder?.amount || totalAmount}
+                    {formatCurrency(currentOrder?.amount || totalAmount)}
                   </span>
                   <span className="text-[10px] text-slate-400 font-medium">
                     Paid via {currentOrder?.paymentMethod || 'MTN MoMo'}

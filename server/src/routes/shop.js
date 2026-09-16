@@ -39,6 +39,12 @@ router.put('/', async (req, res) => {
         ? data.facilities
         : '[]';
 
+    const parsedRadius = parseFloat(data.deliveryRadius);
+    const deliveryRadius = !isNaN(parsedRadius) ? parsedRadius : 8.5;
+
+    const parsedRating = parseFloat(data.rating);
+    const rating = !isNaN(parsedRating) ? parsedRating : 4.9;
+
     const shop = await prisma.shopProfile.upsert({
       where: { id: data.id || 'sparkle' },
       update: {
@@ -48,14 +54,14 @@ router.put('/', async (req, res) => {
         neighborhood: data.neighborhood,
         physicalAddress: data.physicalAddress,
         digitalAddress: data.digitalAddress,
-        deliveryRadius: data.deliveryRadius !== undefined ? Number(data.deliveryRadius) : 8.5,
+        deliveryRadius,
         primaryPhone: data.primaryPhone,
         whatsapp: data.whatsapp,
         businessEmail: data.businessEmail,
         openTime: data.openTime,
         closeTime: data.closeTime,
         turnaroundPromise: data.turnaroundPromise,
-        rating: data.rating !== undefined ? Number(data.rating) : 4.9,
+        rating,
         currency: data.currency || 'GH₵',
         pricePerKg: String(data.pricePerKg || '32.00'),
         image: data.image,
@@ -69,14 +75,14 @@ router.put('/', async (req, res) => {
         neighborhood: data.neighborhood,
         physicalAddress: data.physicalAddress || 'Plot 14B, Upper West Side, Ring Road Central, Accra',
         digitalAddress: data.digitalAddress,
-        deliveryRadius: data.deliveryRadius !== undefined ? Number(data.deliveryRadius) : 8.5,
+        deliveryRadius,
         primaryPhone: data.primaryPhone || '+233 24 123 4567',
         whatsapp: data.whatsapp,
         businessEmail: data.businessEmail,
         openTime: data.openTime || '07:00',
         closeTime: data.closeTime || '20:30',
         turnaroundPromise: data.turnaroundPromise || '24h',
-        rating: data.rating !== undefined ? Number(data.rating) : 4.9,
+        rating,
         currency: data.currency || 'GH₵',
         pricePerKg: String(data.pricePerKg || '32.00'),
         image: data.image,

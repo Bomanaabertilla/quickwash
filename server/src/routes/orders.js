@@ -74,13 +74,36 @@ router.post('/', async (req, res) => {
     } = req.body;
 
     // Determine dayId and time from payload
-    const resolvedDay = (day || slot.toLowerCase().slice(0, 3)).trim().toLowerCase();
-    
-    // Extract time from slot like "Mon May 25 (10:00 AM)" if timeKey not explicit
-    let resolvedTime = timeKey;
-    if (!resolvedTime && slot.includes('(') && slot.includes(')')) {
+    const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const todayDayId = dayNames[new Date().getDay()];
+    const slotLower = (slot || '').toLowerCase();
+
+    let resolvedDay = day ? day.trim().toLowerCase() : '';
+    if (!resolvedDay || resolvedDay.includes('today') || resolvedDay.includes('now') || slotLower.includes('today')) {
+      resolvedDay = todayDayId;
+    } else {
+      for (const d of ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']) {
+        if (resolvedDay.includes(d) || slotLower.includes(d)) {
+          resolvedDay = d;
+          break;
+        }
+      }
+    }
+
+    // Extract time from slot or timeKey
+    let resolvedTime = timeKey || '';
+    if (resolvedTime.includes('(') && resolvedTime.includes(')')) {
+      const match = resolvedTime.match(/\((.*?)\)/);
+      if (match) resolvedTime = match[1].trim();
+    } else if (!resolvedTime && slot.includes('(') && slot.includes(')')) {
       const match = slot.match(/\((.*?)\)/);
       if (match) resolvedTime = match[1].trim();
+    }
+    const timeRegexMatch = (resolvedTime || slot).match(/\b(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))\b/i);
+    if (timeRegexMatch) {
+      resolvedTime = timeRegexMatch[1].trim().toUpperCase();
+    } else if (slotLower.includes('immediate')) {
+      resolvedTime = 'Immediate';
     }
 
     // Generate unique order ID

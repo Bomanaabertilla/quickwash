@@ -24,61 +24,119 @@ import {
   ArrowRight,
   Info
 } from 'lucide-react';
-import { getOrders, saveOrders, updateOrderStatus } from '../data/ordersStore';
+import { getOrders, saveOrders, updateOrderStatus, syncOrdersWithBackend } from '../data/ordersStore';
+import { getPublishedAvailability } from '../data/availabilityStore';
+import { formatDashboardHeaderDate, formatOrderTimestamp, formatCurrency, getTodayDayId, parseSlot } from '../utils/dateUtils';
 
 export default function OwnerBookingsScheduleScreen({ onShowToast }) {
   // Filters & State
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All slots');
   const [selectedRider, setSelectedRider] = useState('Kwame Mensah (#41)');
-  const [viewMode, setViewMode] = useState('comfortable'); // 'compact' | 'comfortable'
+  const [viewMode, setViewMode] = useState('comfortable'); // 'compact' | 'comfortable' | 'table'
   const [orders, setOrders] = useState(() => getOrders());
-  const [selectedOrderId, setSelectedOrderId] = useState(() => orders[0]?.id || 'LB-2026-0091');
+  const [selectedOrderId, setSelectedOrderId] = useState(() => orders[0]?.id || null);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [availability, setAvailability] = useState(() => getPublishedAvailability());
+
+  const todayDayId = getTodayDayId();
 
   useEffect(() => {
-    const handleUpdate = (e) => {
-      if (e.detail) {
+    // Sync fresh orders from backend on mount
+    syncOrdersWithBackend().then((latest) => {
+      if (latest && latest.length > 0) {
+        setOrders(latest);
+        if (!selectedOrderId) setSelectedOrderId(latest[0].id);
+      }
+    });
+
+    const handleOrdersUpdate = (e) => {
+      if (e.detail && e.detail.length > 0) {
         setOrders(e.detail);
-        if (!selectedOrderId && e.detail.length > 0) {
-          setSelectedOrderId(e.detail[0].id);
-        }
+        // Automatically select newest incoming order so owner sees it immediately!
+        setSelectedOrderId(e.detail[0].id);
       } else {
         const fresh = getOrders();
         setOrders(fresh);
-        if (!selectedOrderId && fresh.length > 0) {
+        if (fresh.length > 0 && !selectedOrderId) {
           setSelectedOrderId(fresh[0].id);
         }
       }
     };
-    window.addEventListener('quickwash:orders_updated', handleUpdate);
-    return () => window.removeEventListener('quickwash:orders_updated', handleUpdate);
-  }, [selectedOrderId]);
+
+    const handleAvailUpdate = (e) => {
+      if (e.detail) setAvailability(e.detail);
+      else setAvailability(getPublishedAvailability());
+    };
+
+    window.addEventListener('quickwash:orders_updated', handleOrdersUpdate);
+    window.addEventListener('quickwash:availability_updated', handleAvailUpdate);
+    return () => {
+      window.removeEventListener('quickwash:orders_updated', handleOrdersUpdate);
+      window.removeEventListener('quickwash:availability_updated', handleAvailUpdate);
+    };
+  }, []);
 
   // Selected Order Object
   const selectedOrder = useMemo(() => {
-    return orders.find(o => o.id === selectedOrderId) || orders[0];
+    return orders.find(o => o.id === selectedOrderId) || orders[0] || null;
   }, [orders, selectedOrderId]);
 
-  // Days list for column matrix
-  const daysList = [
-    { id: 'mon', name: 'Mon', date: '12', isToday: false },
-    { id: 'tue', name: 'Tue', date: '13', isToday: true },
-    { id: 'wed', name: 'Wed', date: '14', isToday: false },
-    { id: 'thu', name: 'Thu', date: '15', isToday: false },
-    { id: 'fri', name: 'Fri', date: '16', isToday: false },
-    { id: 'sat', name: 'Sat', date: '17', isToday: false }
-  ];
+  // Days list for column matrix - dynamically derived from published schedule
+  const daysList = useMemo(() => {
+    if (availability.days && availability.days.length > 0) {
+      // Exclude Sunday if closed or keep 6 operating days (Mon-Sat)
+      return availability.days
+        .filter(d => d.id !== 'sun' || d.status !== 'Closed')
+        .map(d => ({
+          id: d.id,
+          name: d.name,
+          fullName: d.fullName,
+          date: d.date || d.dayNum || '',
+          isToday: d.id === todayDayId
+        }));
+    }
+    return [
+      { id: 'mon', name: 'Mon', date: 'Mon', isToday: todayDayId === 'mon' },
+      { id: 'tue', name: 'Tue', date: 'Tue', isToday: todayDayId === 'tue' },
+      { id: 'wed', name: 'Wed', date: 'Wed', isToday: todayDayId === 'wed' },
+      { id: 'thu', name: 'Thu', date: 'Thu', isToday: todayDayId === 'thu' },
+      { id: 'fri', name: 'Fri', date: 'Fri', isToday: todayDayId === 'fri' },
+      { id: 'sat', name: 'Sat', date: 'Sat', isToday: todayDayId === 'sat' }
+    ];
+  }, [availability, todayDayId]);
 
-  // Time slots for row matrix
-  const timeSlots = [
-    { key: '8:00 AM', label: '8:00 AM', sub: 'Pickup' },
-    { key: '9:00 AM', label: '9:00 AM', sub: 'Transit' },
-    { key: '10:15 AM', label: '10:15 AM', sub: 'Processing' },
-    { key: '12:15 PM', label: '12:15 PM', sub: 'Noon' },
-    { key: '1:30 PM', label: '1:30 PM', sub: 'ACTIVE', isPeak: true },
-    { key: '4:15 PM', label: '4:15 PM', sub: 'Evening' }
-  ];
+  // Time slots for row matrix - includes immediate walk-ins and store pickup slots
+  const timeSlots = useMemo(() => {
+    const slotsMap = new Map();
+    // 1. Immediate / Walk-In row for orders booked today / immediate
+    slotsMap.set('Immediate', { key: 'Immediate', label: 'Walk-In / Rush', sub: 'Today', isPeak: true });
+
+    // 2. Add published store operating slots
+    if (availability.days) {
+      availability.days.forEach(d => {
+        d.slots?.forEach(s => {
+          if (!slotsMap.has(s.time)) {
+            slotsMap.set(s.time, {
+              key: s.time,
+              label: s.time,
+              sub: s.period || 'Pickup',
+              isPeak: s.status === 'Filling Fast' || s.capacity <= 3
+            });
+          }
+        });
+      });
+    }
+
+    // Default fallbacks if empty
+    if (slotsMap.size <= 1) {
+      ['8:00 AM', '10:00 AM', '1:00 PM', '3:30 PM', '5:00 PM'].forEach(t => {
+        slotsMap.set(t, { key: t, label: t, sub: 'Operating Window' });
+      });
+    }
+
+    return Array.from(slotsMap.values());
+  }, [availability]);
 
   // Count summaries
   const stats = useMemo(() => {
@@ -172,9 +230,9 @@ export default function OwnerBookingsScheduleScreen({ onShowToast }) {
             </button>
             <div className="flex items-center gap-1.5 px-2 font-extrabold text-xs text-stone-800">
               <CalendarIcon className="w-3.5 h-3.5 text-[#0D6352]" />
-              <span>May 12 – May 18, 2026</span>
-              <span className="text-[10px] font-bold text-stone-500 bg-stone-200 px-1.5 py-0.5 rounded-md">
-                Week 20
+              <span>{availability.weekRange || 'Active Store Week'}</span>
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-md">
+                Live Storefront Schedule
               </span>
             </div>
             <button className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white text-stone-600 transition-colors">
@@ -249,8 +307,28 @@ export default function OwnerBookingsScheduleScreen({ onShowToast }) {
           </div>
         </div>
 
-        {/* Right: Courier selector & Export button */}
+        {/* Right: Courier selector, View Toggle & Export button */}
         <div className="flex items-center gap-2">
+          {/* View Toggle */}
+          <div className="flex items-center gap-1 bg-stone-200/80 p-0.5 rounded-xl border border-stone-300">
+            <button
+              onClick={() => setViewMode('comfortable')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                viewMode !== 'table' ? 'bg-white text-stone-900 shadow-2xs' : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              Calendar Grid
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                viewMode === 'table' ? 'bg-white text-stone-900 shadow-2xs' : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              Orders Feed ({filteredOrders.length})
+            </button>
+          </div>
+
           <div className="flex items-center gap-1.5 bg-white border border-slate-300 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-800 shadow-2xs">
             <Truck className="w-3.5 h-3.5 text-[#006a60]" />
             <select
@@ -304,19 +382,98 @@ export default function OwnerBookingsScheduleScreen({ onShowToast }) {
               View all slots ({orders.length} total bookings)
             </button>
           </div>
+        ) : viewMode === 'table' ? (
+          /* Live Bookings Table View */
+          <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs overflow-hidden">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <span className="font-extrabold text-sm text-slate-900">Live Incoming Bookings</span>
+                <span className="ml-2 text-xs text-slate-500 font-medium">({filteredOrders.length} bookings matching filter)</span>
+              </div>
+              <span className="text-xs text-slate-500 font-medium">Click any order to inspect details below</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-100/70 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10.5px]">
+                    <th className="py-3 px-4">Order ID & Placed</th>
+                    <th className="py-3 px-4">Customer</th>
+                    <th className="py-3 px-4">Scheduled Slot</th>
+                    <th className="py-3 px-4">Services</th>
+                    <th className="py-3 px-4">Amount</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredOrders.map((order) => {
+                    const isSelected = selectedOrderId === order.id;
+                    return (
+                      <tr
+                        key={order.id}
+                        onClick={() => setSelectedOrderId(order.id)}
+                        className={`cursor-pointer transition-colors ${
+                          isSelected ? 'bg-teal-50/70 font-semibold' : 'hover:bg-slate-50'
+                        }`}
+                      >
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900">
+                          {order.id}
+                          <div className="text-[10.5px] text-slate-400 font-sans font-normal mt-0.5">
+                            {formatOrderTimestamp(order.createdAt)}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-extrabold text-slate-900">{order.customerName}</div>
+                          <div className="text-[11px] text-slate-500">{order.phone}</div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="bg-slate-100 text-slate-800 font-bold px-2.5 py-1 rounded-md text-[11px]">
+                            {order.slot}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 max-w-xs truncate text-slate-700 font-medium">
+                          {order.summary}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-[#006a60]">
+                          {formatCurrency(order.amount)}
+                        </td>
+                        <td className="py-3 px-4">
+                          {renderStatusBadge(order.status)}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedOrderId(order.id);
+                            }}
+                            className="px-3 py-1 bg-[#008276] hover:bg-[#007065] text-white rounded-xl text-xs font-bold transition-all shadow-2xs"
+                          >
+                            Inspect
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ) : (
           /* Matrix Table with filtered orders */
           <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs min-w-[960px] overflow-hidden">
             
             {/* Matrix Column Headers: Days of the Week */}
-            <div className="grid grid-cols-7 border-b border-slate-200/80 bg-slate-50/90">
+            <div
+              className="grid border-b border-slate-200/80 bg-slate-50/90"
+              style={{ gridTemplateColumns: `140px repeat(${daysList.length}, minmax(130px, 1fr))` }}
+            >
               
               {/* Time Header Corner */}
               <div className="p-3.5 flex items-center justify-center border-r border-slate-200/60 bg-slate-100/60 font-extrabold text-[11px] uppercase tracking-wider text-slate-400">
                 TIME
               </div>
 
-              {/* 6 Day Column Headers */}
+              {/* Day Column Headers */}
               {daysList.map((day) => (
                 <div
                   key={day.id}
@@ -340,7 +497,11 @@ export default function OwnerBookingsScheduleScreen({ onShowToast }) {
 
             {/* Matrix Rows by Time Slot */}
             {timeSlots.map((slot) => (
-              <div key={slot.key} className="grid grid-cols-7 border-b border-slate-200/60 hover:bg-slate-50/30 transition-colors min-h-[90px]">
+              <div
+                key={slot.key}
+                className="grid border-b border-slate-200/60 hover:bg-slate-50/30 transition-colors min-h-[90px]"
+                style={{ gridTemplateColumns: `140px repeat(${daysList.length}, minmax(130px, 1fr))` }}
+              >
                 
                 {/* Time Slot Label Cell */}
                 <div className="p-3 border-r border-slate-200/60 flex flex-col justify-center bg-slate-50/30">
@@ -353,12 +514,30 @@ export default function OwnerBookingsScheduleScreen({ onShowToast }) {
                   </span>
                 </div>
 
-                {/* 6 Day Booking Cells */}
+                {/* Day Booking Cells */}
                 {daysList.map((day) => {
                   // Find filtered bookings for this day and time slot
-                  const dayBookings = filteredOrders.filter(
-                    o => o.day === day.id && o.timeKey === slot.key
-                  );
+                  const dayBookings = filteredOrders.filter((o) => {
+                    // Day matching
+                    const oDay = (o.day || (o.slot?.toLowerCase().includes('today') ? todayDayId : o.slot?.toLowerCase().slice(0, 3))).toLowerCase();
+                    const isMatchDay = oDay === day.id || (day.isToday && (o.slot?.toLowerCase().includes('today') || oDay === todayDayId));
+                    if (!isMatchDay) return false;
+
+                    // Slot matching
+                    if (slot.key === 'Immediate') {
+                      return (
+                        o.timeKey === 'Immediate' ||
+                        o.slot?.toLowerCase().includes('immediate') ||
+                        (o.slot?.toLowerCase().includes('today') && (!o.timeKey || o.timeKey === 'Immediate'))
+                      );
+                    }
+
+                    return (
+                      o.timeKey === slot.key ||
+                      (o.slot && o.slot.includes(slot.key)) ||
+                      (slot.key && o.timeKey && o.timeKey.startsWith(slot.key.split(' ')[0]))
+                    );
+                  });
 
                   const isTodayActiveSlot = day.isToday && slot.key === '1:30 PM';
 
@@ -422,7 +601,7 @@ export default function OwnerBookingsScheduleScreen({ onShowToast }) {
                               {order.amount && (
                                 <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[10.5px]">
                                   <span className="font-extrabold text-[#006a60]">
-                                    GHC {order.amount}
+                                    {formatCurrency(order.amount)}
                                   </span>
                                   {order.isPaid && (
                                     <span className="text-[9.5px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">
@@ -456,20 +635,28 @@ export default function OwnerBookingsScheduleScreen({ onShowToast }) {
 
           <div className="flex items-center gap-1 bg-slate-200/80 p-1 rounded-xl border border-slate-300">
             <button
-              onClick={() => setViewMode('compact')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                viewMode === 'compact' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Compact View
-            </button>
-            <button
               onClick={() => setViewMode('comfortable')}
               className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
                 viewMode === 'comfortable' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Comfortable View
+              Matrix Grid
+            </button>
+            <button
+              onClick={() => setViewMode('compact')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                viewMode === 'compact' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Compact
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                viewMode === 'table' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              All Orders ({orders.length})
             </button>
           </div>
         </div>
@@ -492,7 +679,7 @@ export default function OwnerBookingsScheduleScreen({ onShowToast }) {
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 font-medium mt-1">
-                  Created Today at 09:14 AM via Customer Mobile PWA
+                  Created {formatOrderTimestamp(selectedOrder.createdAt)} via Customer Mobile PWA
                 </p>
               </div>
 
@@ -632,16 +819,16 @@ export default function OwnerBookingsScheduleScreen({ onShowToast }) {
             <div className="flex flex-col gap-2">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Service breakdown</span>
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/70 flex flex-col gap-2 text-xs">
-                {selectedOrder.items.map((item, idx) => (
+                {(selectedOrder.items || []).map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between text-slate-800 font-medium">
                     <span>{item.name}</span>
-                    <span className="font-extrabold text-slate-900">GHC {item.price}</span>
+                    <span className="font-extrabold text-slate-900">{formatCurrency(item.price)}</span>
                   </div>
                 ))}
                 
                 <div className="pt-2 mt-1 border-t border-slate-200 flex items-center justify-between text-sm">
                   <span className="font-extrabold text-slate-900">Total amount</span>
-                  <span className="font-mono font-extrabold text-[#006a60] text-base">GHC {selectedOrder.amount}</span>
+                  <span className="font-mono font-extrabold text-[#006a60] text-base">{formatCurrency(selectedOrder.amount)}</span>
                 </div>
               </div>
             </div>
