@@ -22,7 +22,14 @@ import { Smartphone, Maximize2, CheckCircle, Store } from 'lucide-react';
 
 export default function App() {
   // Navigation & Screen state: 'providers' | 'provider-detail' | 'services' | 'preferences' | 'payment' | 'confirmation' | 'tracking' | 'owner-login' | 'owner-dashboard' | 'owner-profile'
-  const [currentScreen, setCurrentScreen] = useState('providers');
+  const [currentScreen, setCurrentScreen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('screen')) return params.get('screen');
+      if (window.location.hash) return window.location.hash.replace('#', '');
+    }
+    return 'owner-dashboard';
+  });
 
   const [selectedPartnerId, setSelectedPartnerId] = useState('sparkle');
   const [scheduledTime, setScheduledTime] = useState('Tue, May 13 (1:30 PM)');
@@ -107,47 +114,60 @@ export default function App() {
     setCurrentScreen('confirmation');
   };
 
-  return (
-    <div className="min-h-screen bg-[#0b1320] flex flex-col items-center justify-center p-2 sm:p-4 relative font-sans">
-      
-      {/* Owner Hub Access Button */}
-      <button
-        onClick={() => setCurrentScreen(currentScreen === 'owner-dashboard' || currentScreen === 'owner-login' ? 'providers' : 'owner-login')}
-        className="fixed top-4 left-4 bg-[#006a60] text-white px-4 py-2 rounded-full text-xs font-extrabold shadow-lg hover:bg-[#005850] transition-all flex items-center gap-2 z-50 border border-teal-400/30"
-      >
-        <Store className="w-4 h-4 text-amber-300" />
-        <span>{currentScreen.startsWith('owner') ? 'Customer App' : 'Owner Hub'}</span>
-      </button>
+  const isOwnerScreen = currentScreen.startsWith('owner');
+  const isWideDashboard = isResponsiveMode || isOwnerScreen;
 
-      {/* Viewport Frame Mode Switcher */}
-      <button
-        onClick={() => setIsResponsiveMode(!isResponsiveMode)}
-        className="fixed top-4 right-4 bg-white/90 backdrop-blur-md border border-white/20 text-slate-900 px-4 py-2 rounded-full text-xs font-bold shadow-lg hover:bg-white transition-all flex items-center gap-2 z-50"
-      >
-        {isResponsiveMode ? (
-          <>
-            <Smartphone className="w-4 h-4 text-brand-teal" />
-            <span>Mobile Frame</span>
-          </>
-        ) : (
-          <>
-            <Maximize2 className="w-4 h-4 text-brand-teal" />
-            <span>Full Responsive</span>
-          </>
+  return (
+    <div className={`min-h-screen font-sans ${isOwnerScreen ? 'bg-[#FBFBF9]' : 'bg-[#f5f4ef] flex flex-col items-center justify-center p-2 sm:p-4'}`}>
+      
+      {/* Elegant, Human View Switcher Dock */}
+      <aside aria-label="Portal Switcher" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 bg-stone-900/90 text-stone-200 backdrop-blur-md px-2 py-1.5 rounded-full shadow-2xl border border-stone-700/80 flex items-center gap-1.5 text-xs font-medium">
+        <button
+          onClick={() => setCurrentScreen('providers')}
+          className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
+            !isOwnerScreen 
+              ? 'bg-white text-stone-900 font-bold shadow-xs' 
+              : 'text-stone-400 hover:text-white'
+          }`}
+        >
+          <span>🛍️ Customer Storefront</span>
+        </button>
+        <button
+          onClick={() => setCurrentScreen('owner-dashboard')}
+          className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
+            isOwnerScreen 
+              ? 'bg-[#0D6352] text-white font-bold shadow-xs' 
+              : 'text-stone-400 hover:text-white'
+          }`}
+        >
+          <span>🏪 Store Manager</span>
+        </button>
+        
+        {!isOwnerScreen && (
+          <button
+            onClick={() => setIsResponsiveMode(!isResponsiveMode)}
+            className="ml-1 pl-2 border-l border-stone-700 text-stone-400 hover:text-white text-[11px] pr-2 flex items-center gap-1"
+            title="Toggle Mobile Bezel Preview"
+          >
+            {isResponsiveMode ? <Smartphone className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            <span>{isResponsiveMode ? 'Phone' : 'Expand'}</span>
+          </button>
         )}
-      </button>
+      </aside>
 
       {/* Main Viewport Container */}
       <div
-        className={`w-full bg-[#f7f9fc] overflow-hidden relative flex flex-col transition-all duration-300 ${
-          isResponsiveMode
-            ? 'max-w-4xl min-h-[92vh] rounded-3xl shadow-2xl'
-            : 'max-w-[420px] h-[844px] max-h-[94vh] rounded-[40px] shadow-device'
+        className={`w-full overflow-hidden relative flex flex-col transition-all duration-300 ${
+          isOwnerScreen
+            ? 'min-h-screen bg-[#FBFBF9]'
+            : isWideDashboard
+            ? 'max-w-[1280px] min-h-[94vh] bg-white rounded-3xl shadow-xl border border-stone-200/80'
+            : 'max-w-[420px] h-[844px] max-h-[94vh] rounded-[40px] shadow-2xl bg-white border-4 border-stone-800'
         }`}
       >
-        {/* Status Bar (Simulated phone bar for mobile frame) */}
-        {!isResponsiveMode && (
-          <div className="h-9 px-6 flex items-center justify-between text-xs font-semibold text-slate-900 select-none z-10 bg-[#f7f9fc]">
+        {/* Status Bar (Simulated phone bar for mobile frame only) */}
+        {!isWideDashboard && !isOwnerScreen && (
+          <div className="h-9 px-6 flex items-center justify-between text-xs font-semibold text-stone-800 select-none z-10 bg-white">
             <span>9:41</span>
             <div className="flex items-center gap-1.5">
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
