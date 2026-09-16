@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite --port 3000 --host",
     "build": "vite build",
-    "preview": "vite preview --port 3000"
+    "preview": "vite preview --port 3000",
+    "server": "npm --prefix server run dev",
+    "server:start": "npm --prefix server start",
+    "server:seed": "npm --prefix server run db:seed"
   },
   "dependencies": {
     "lucide-react": "^0.344.0",

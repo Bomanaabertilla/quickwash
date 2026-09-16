@@ -1,0 +1,129 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model ShopProfile {
+  id                String   @id @default("sparkle")
+  name              String
+  branchDescriptor  String?
+  category          String?
+  neighborhood      String?
+  physicalAddress   String
+  digitalAddress    String?
+  deliveryRadius    Float    @default(8.5)
+  primaryPhone      String
+  whatsapp          String?
+  businessEmail     String?
+  openTime          String   @default("07:00")
+  closeTime         String   @default("20:30")
+  turnaroundPromise String   @default("24h")
+  rating            Float    @default(4.9)
+  currency          String   @default("GH₵")
+  pricePerKg        String   @default("32.00")
+  image             String?
+  facilities        String   @default("[]") // JSON string of string array
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Service {
+  id          Int      @id @default(autoincrement())
+  name        String
+  category    String
+  description String
+  unit        String   // "per kg", "per item", "flat rate"
+  price       String   // "37.00"
+  turnaround  String   // "24 hrs"
+  minOrder    String   // "3 kg min"
+  popular     Boolean  @default(false)
+  active      Boolean  @default(true)
+  iconName    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AvailabilityWeek {
+  id          String        @id @default("current")
+  isPublished Boolean       @default(true)
+  weekRange   String        // "May 25 – May 31, 2026"
+  weekLabel   String        // "Week of May 25 – May 31, 2026"
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  days        DaySchedule[]
+}
+
+model DaySchedule {
+  id        String           @id // "mon", "tue", "wed", ...
+  weekId    String
+  week      AvailabilityWeek @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  name      String           // "Mon"
+  fullName  String           // "Monday"
+  date      String           // "May 25"
+  month     String           // "May"
+  dayNum    String           // "25"
+  status    String           // "Open" or "Closed"
+  hours     String           // "8:00 AM – 6:30 PM"
+  sortOrder Int              @default(0)
+  slots     TimeSlot[]
+}
+
+model TimeSlot {
+  id          Int         @id @default(autoincrement())
+  dayId       String
+  day         DaySchedule @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  time        String      // "8:00 AM"
+  period      String      // "Morning", "Afternoon", "Evening"
+  status      String      @default("Available")
+  capacity    Int         @default(5)
+  bookedCount Int         @default(0)
+  orders      Order[]
+}
+
+model Order {
+  id             String         @id // "LB-2026-0091"
+  customerName   String
+  phone          String
+  tier           String         @default("Regular Customer")
+  slot           String         // "Mon May 25 (10:00 AM)"
+  day            String?        // "mon"
+  timeKey        String?        // "10:00 AM"
+  timeSlotId     Int?
+  timeSlot       TimeSlot?      @relation(fields: [timeSlotId], references: [id])
+  status         String         @default("Confirmed")
+  summary        String
+  amount         String
+  paymentMethod  String         @default("MTN Mobile Money")
+  txId           String?
+  isPaid         Boolean        @default(false)
+  assignedRider  String?
+  address        String
+  specialNotes   String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  items          OrderItem[]
+  history        OrderHistory[]
+}
+
+model OrderItem {
+  id        Int      @id @default(autoincrement())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  name      String
+  price     String
+  quantity  Int      @default(1)
+}
+
+model OrderHistory {
+  id         Int      @id @default(autoincrement())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  stage      String
+  time       String
+  done       Boolean  @default(false)
+  orderIndex Int      @default(0)
+}
