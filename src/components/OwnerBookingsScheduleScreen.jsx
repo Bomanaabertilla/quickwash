@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -24,6 +24,7 @@ import {
   ArrowRight,
   Info
 } from 'lucide-react';
+import { getOrders, saveOrders, updateOrderStatus } from '../data/ordersStore';
 
 export default function OwnerBookingsScheduleScreen({ onShowToast }) {
   // Filters & State
@@ -31,277 +32,28 @@ export default function OwnerBookingsScheduleScreen({ onShowToast }) {
   const [statusFilter, setStatusFilter] = useState('All slots');
   const [selectedRider, setSelectedRider] = useState('Kwame Mensah (#41)');
   const [viewMode, setViewMode] = useState('comfortable'); // 'compact' | 'comfortable'
-  const [selectedOrderId, setSelectedOrderId] = useState('LB-2026-0091');
+  const [orders, setOrders] = useState(() => getOrders());
+  const [selectedOrderId, setSelectedOrderId] = useState(() => orders[0]?.id || 'LB-2026-0091');
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
 
-  // Master Orders Dataset
-  const [orders, setOrders] = useState([
-    {
-      id: 'LB-2026-0091',
-      customerName: 'Alex Morgan',
-      phone: '+233 24 123 4567',
-      tier: '5th Order • Loyal Tier',
-      slot: 'Tue 1:30 PM',
-      day: 'tue',
-      timeKey: '1:30 PM',
-      status: 'Confirmed',
-      summary: 'Wash & Fold 5kg + Suit + Blouse',
-      amount: '390.00',
-      paymentMethod: 'MTN Mobile Money',
-      txId: 'MOMO-8839213-GH',
-      isPaid: true,
-      assignedRider: 'Kwame Mensah + Rider #41 (Assigned)',
-      address: 'House 14, 4th Circular Road, Cantonments, Accra',
-      specialNotes: '2 large green laundry bags. One contains a delicate silk blouse — use hypoallergenic lavender soft detergent only.',
-      items: [
-        { name: 'Standard Wash & Fold (5 kg)', price: '210.00' },
-        { name: 'Dry Clean Men\'s Two-Piece Suit (x1)', price: '120.00' },
-        { name: 'Delicate Silk Blouse Press (x1)', price: '60.00' }
-      ]
-    },
-    {
-      id: 'LB-2026-0093',
-      customerName: 'Sarah K.',
-      phone: '+233 20 888 9900',
-      tier: '2nd Order',
-      slot: 'Tue 1:30 PM',
-      day: 'tue',
-      timeKey: '1:30 PM',
-      status: 'In progress',
-      summary: 'Iron Only (15 pcs)',
-      amount: '150.00',
-      paymentMethod: 'Telecel Cash',
-      txId: 'TASH-991204-GH',
-      isPaid: true,
-      assignedRider: 'Kwame Mensah + Rider #41 (Assigned)',
-      address: 'House 12, Cantonments, Accra',
-      specialNotes: 'Extra starch on shirt collars please.',
-      items: [
-        { name: 'Steam Press & Iron (15 pcs)', price: '150.00' }
-      ]
-    },
-    {
-      id: 'LB-0062',
-      customerName: 'David O.',
-      phone: '+233 27 555 4433',
-      tier: 'Regular',
-      slot: 'Mon 8:00 AM',
-      day: 'mon',
-      timeKey: '8:00 AM',
-      status: 'Ready / Delivered',
-      summary: 'Express Wash 4kg',
-      amount: '120.00',
-      paymentMethod: 'AT Money',
-      isPaid: true,
-      assignedRider: 'Kofi Ansah #412',
-      address: 'Apartment 4B, Ocean View',
-      items: [{ name: 'Express Wash 4kg', price: '120.00' }]
-    },
-    {
-      id: 'LB-0079',
-      customerName: 'Nana Darko',
-      phone: '+233 24 999 1122',
-      tier: '3rd Order',
-      slot: 'Tue 8:00 AM',
-      day: 'tue',
-      timeKey: '8:00 AM',
-      status: 'Confirmed',
-      summary: 'Wash & Fold • 8kg',
-      amount: '240.00',
-      paymentMethod: 'MTN Mobile Money',
-      isPaid: true,
-      assignedRider: 'Kwame Mensah + Rider #41',
-      address: 'Suite 302, Airport Residential',
-      items: [{ name: 'Wash & Fold 8kg', price: '240.00' }]
-    },
-    {
-      id: 'LB-0104',
-      customerName: 'Grace Aboagye',
-      phone: '+233 50 123 7890',
-      tier: 'First Time',
-      slot: 'Thu 8:00 AM',
-      day: 'thu',
-      timeKey: '8:00 AM',
-      status: 'Confirmed',
-      summary: 'Bedding Bundle',
-      amount: '180.00',
-      paymentMethod: 'Cash on Delivery',
-      isPaid: false,
-      assignedRider: 'Yaw Mensah #405',
-      address: 'East Legon 15th Street',
-      items: [{ name: 'Bedding & Duvet Deep Clean', price: '180.00' }]
-    },
-    {
-      id: 'LB-0120',
-      customerName: 'Felix Annan',
-      phone: '+233 24 333 4411',
-      tier: 'Regular',
-      slot: 'Sat 8:00 AM',
-      day: 'sat',
-      timeKey: '8:00 AM',
-      status: 'Confirmed',
-      summary: 'Sneaker Care (2 Pairs)',
-      amount: '160.00',
-      paymentMethod: 'MTN Mobile Money',
-      isPaid: true,
-      assignedRider: 'Nana Kwesi #420',
-      address: 'Labone Crescent',
-      items: [{ name: 'Premium Sneaker Wash x2', price: '160.00' }]
-    },
-    {
-      id: 'LB-0081',
-      customerName: 'Rita Sowah',
-      phone: '+233 20 777 6655',
-      tier: 'VIP Tier',
-      slot: 'Tue 9:00 AM',
-      day: 'tue',
-      timeKey: '9:00 AM',
-      status: 'In progress',
-      summary: 'Dry Clean & Press',
-      amount: '290.00',
-      paymentMethod: 'MTN Mobile Money',
-      isPaid: true,
-      assignedRider: 'Kwame Mensah + Rider #41',
-      address: 'Cantonments Villas',
-      items: [{ name: 'Dry Clean 3 Dresses', price: '290.00' }]
-    },
-    {
-      id: 'LB-0098',
-      customerName: 'Kofi Antwi',
-      phone: '+233 27 111 2233',
-      tier: 'Regular',
-      slot: 'Wed 9:00 AM',
-      day: 'wed',
-      timeKey: '9:00 AM',
-      status: 'Confirmed',
-      summary: 'Wash & Fold 6kg',
-      amount: '190.00',
-      paymentMethod: 'Telecel Cash',
-      isPaid: true,
-      assignedRider: 'Kofi Ansah #412',
-      address: 'Osu Oxford Street',
-      items: [{ name: 'Wash & Fold 6kg', price: '190.00' }]
-    },
-    {
-      id: 'LB-0111',
-      customerName: 'Bessie Cooper',
-      phone: '+233 54 888 1234',
-      tier: 'Loyal Tier',
-      slot: 'Fri 9:00 AM',
-      day: 'fri',
-      timeKey: '9:00 AM',
-      status: 'Confirmed',
-      summary: 'Curtains Clean',
-      amount: '350.00',
-      paymentMethod: 'MTN Mobile Money',
-      isPaid: true,
-      assignedRider: 'Yaw Mensah #405',
-      address: 'Roman Ridge',
-      items: [{ name: 'Heavy Curtain Cleaning', price: '350.00' }]
-    },
-    {
-      id: 'LB-0068',
-      customerName: 'Edward K.',
-      phone: '+233 24 555 9988',
-      tier: 'Regular',
-      slot: 'Mon 10:15 AM',
-      day: 'mon',
-      timeKey: '10:15 AM',
-      status: 'In progress',
-      summary: '5 Suit Press',
-      amount: '200.00',
-      paymentMethod: 'MTN Mobile Money',
-      isPaid: true,
-      assignedRider: 'Kofi Ansah #412',
-      address: 'Ridge Towers',
-      items: [{ name: '5 Suits Steam Press', price: '200.00' }]
-    },
-    {
-      id: 'LB-0106',
-      customerName: 'Samuel T.',
-      phone: '+233 20 444 8811',
-      tier: 'Regular',
-      slot: 'Thu 10:15 AM',
-      day: 'thu',
-      timeKey: '10:15 AM',
-      status: 'Confirmed',
-      summary: 'Wash & Fold 10kg',
-      amount: '310.00',
-      paymentMethod: 'AT Money',
-      isPaid: true,
-      assignedRider: 'Yaw Mensah #405',
-      address: 'Spintex Road',
-      items: [{ name: 'Wash & Fold 10kg', price: '310.00' }]
-    },
-    {
-      id: 'LB-0125',
-      customerName: 'Albert Flores',
-      phone: '+233 27 999 4400',
-      tier: 'Regular',
-      slot: 'Sat 10:15 AM',
-      day: 'sat',
-      timeKey: '10:15 AM',
-      status: 'Confirmed',
-      summary: 'Blanket Clean',
-      amount: '140.00',
-      paymentMethod: 'MTN Mobile Money',
-      isPaid: true,
-      assignedRider: 'Nana Kwesi #420',
-      address: 'Dzorwulu',
-      items: [{ name: 'Heavy Quilt Clean', price: '140.00' }]
-    },
-    {
-      id: 'LB-0085',
-      customerName: 'Clara Mensah',
-      phone: '+233 24 666 3322',
-      tier: 'Loyal Tier',
-      slot: 'Tue 12:15 PM',
-      day: 'tue',
-      timeKey: '12:15 PM',
-      status: 'Confirmed',
-      summary: 'Delicates Handwash',
-      amount: '210.00',
-      paymentMethod: 'MTN Mobile Money',
-      isPaid: true,
-      assignedRider: 'Kwame Mensah + Rider #41',
-      address: 'Airport Hills',
-      items: [{ name: 'Handwash Silk & Lace', price: '210.00' }]
-    },
-    {
-      id: 'LB-0102',
-      customerName: 'Patricia Dadzie',
-      phone: '+233 20 111 4455',
-      tier: 'Regular',
-      slot: 'Thu 1:30 PM',
-      day: 'thu',
-      timeKey: '1:30 PM',
-      status: 'Confirmed',
-      summary: 'Suit Dry Cleaning',
-      amount: '180.00',
-      paymentMethod: 'Telecel Cash',
-      isPaid: true,
-      assignedRider: 'Yaw Mensah #405',
-      address: 'Achimota Golf Club',
-      items: [{ name: 'Suit & Dress Clean', price: '180.00' }]
-    },
-    {
-      id: 'LB-0118',
-      customerName: 'Emmanuel O.',
-      phone: '+233 24 777 8899',
-      tier: 'Regular',
-      slot: 'Fri 1:30 PM',
-      day: 'fri',
-      timeKey: '1:30 PM',
-      status: 'Confirmed',
-      summary: 'Wash & Fold 7kg',
-      amount: '220.00',
-      paymentMethod: 'MTN Mobile Money',
-      isPaid: true,
-      assignedRider: 'Kofi Ansah #412',
-      address: 'Abelemkpe',
-      items: [{ name: 'Wash & Fold 7kg', price: '220.00' }]
-    }
-  ]);
+  useEffect(() => {
+    const handleUpdate = (e) => {
+      if (e.detail) {
+        setOrders(e.detail);
+        if (!selectedOrderId && e.detail.length > 0) {
+          setSelectedOrderId(e.detail[0].id);
+        }
+      } else {
+        const fresh = getOrders();
+        setOrders(fresh);
+        if (!selectedOrderId && fresh.length > 0) {
+          setSelectedOrderId(fresh[0].id);
+        }
+      }
+    };
+    window.addEventListener('quickwash:orders_updated', handleUpdate);
+    return () => window.removeEventListener('quickwash:orders_updated', handleUpdate);
+  }, [selectedOrderId]);
 
   // Selected Order Object
   const selectedOrder = useMemo(() => {
@@ -368,7 +120,8 @@ export default function OwnerBookingsScheduleScreen({ onShowToast }) {
 
   // Handle status update of selected order
   const handleUpdateOrderStatus = (newStatus) => {
-    setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, status: newStatus } : o));
+    if (!selectedOrder?.id) return;
+    updateOrderStatus(selectedOrder.id, newStatus);
     if (onShowToast) onShowToast(`Updated #${selectedOrder.id} status to: ${newStatus}`);
   };
 

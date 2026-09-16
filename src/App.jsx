@@ -18,6 +18,8 @@ import OwnerAuthScreen from './components/OwnerAuthScreen.jsx';
 import OwnerDashboardScreen from './components/OwnerDashboardScreen.jsx';
 import OwnerProfileSetupScreen from './components/OwnerProfileSetupScreen.jsx';
 import { PARTNERS_DATA, CATEGORIES } from './data/partners.js';
+import { getShopProfile } from './data/shopStore.js';
+import { createOrder, getLatestOrder } from './data/ordersStore.js';
 import { Smartphone, Maximize2, CheckCircle, Store } from 'lucide-react';
 
 export default function App() {
@@ -32,13 +34,16 @@ export default function App() {
   });
 
   const [selectedPartnerId, setSelectedPartnerId] = useState('sparkle');
-  const [scheduledTime, setScheduledTime] = useState('Tue, May 13 (1:30 PM)');
-  const [totalAmount, setTotalAmount] = useState('390.00');
+  const [scheduledTime, setScheduledTime] = useState('Mon, May 25 (10:00 AM)');
+  const [totalAmount, setTotalAmount] = useState('235.00');
+  const [selectedServices, setSelectedServices] = useState([]);
   const [selectedNetwork, setSelectedNetwork] = useState('mtn');
   const [momoNumber, setMomoNumber] = useState('+233 24 123 4567');
+  const [activeBookingRef, setActiveBookingRef] = useState(() => getLatestOrder()?.id || 'LB-2026-0091');
+  const [specialInstructions, setSpecialInstructions] = useState('Use hypoallergenic lavender detergent');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
-  const [address, setAddress] = useState('742 Evergreen Terrace');
+  const [address, setAddress] = useState('Plot 14B, Ring Road Central, Accra');
   const [activeTab, setActiveTab] = useState('laundry');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isResponsiveMode, setIsResponsiveMode] = useState(false);
@@ -53,7 +58,19 @@ export default function App() {
 
   // Filter partners based on search query & active category pill
   const filteredPartners = useMemo(() => {
-    return PARTNERS_DATA.filter((partner) => {
+    return PARTNERS_DATA.map(p => {
+      if (p.id === 'sparkle') {
+        const shop = getShopProfile();
+        return {
+          ...p,
+          name: shop.name,
+          neighborhood: shop.neighborhood || p.neighborhood,
+          deliveryTime: `${shop.turnaroundPromise} Turnaround`,
+          pricePerKg: shop.pricePerKg
+        };
+      }
+      return p;
+    }).filter((partner) => {
       const matchesSearch =
         partner.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         partner.neighborhood.toLowerCase().includes(searchQuery.toLowerCase());
@@ -64,7 +81,18 @@ export default function App() {
   }, [searchQuery, activeCategory]);
 
   const selectedPartner = useMemo(() => {
-    return PARTNERS_DATA.find((p) => p.id === selectedPartnerId) || PARTNERS_DATA[0];
+    const base = PARTNERS_DATA.find((p) => p.id === selectedPartnerId) || PARTNERS_DATA[0];
+    if (base.id === 'sparkle') {
+      const shop = getShopProfile();
+      return {
+        ...base,
+        name: shop.name,
+        neighborhood: shop.neighborhood || base.neighborhood,
+        deliveryTime: `${shop.turnaroundPromise} Turnaround`,
+        pricePerKg: shop.pricePerKg
+      };
+    }
+    return base;
   }, [selectedPartnerId]);
 
   const handleSelectPartner = (partner) => {
@@ -91,8 +119,9 @@ export default function App() {
     setCurrentScreen('services');
   };
 
-  const handleProceedToPreferences = (totalStr) => {
+  const handleProceedToPreferences = (totalStr, servicesList) => {
     setTotalAmount(totalStr);
+    if (servicesList) setSelectedServices(servicesList);
     setCurrentScreen('preferences');
   };
 
@@ -106,11 +135,27 @@ export default function App() {
     if (prefData?.estimatedTotal) {
       setTotalAmount(prefData.estimatedTotal);
     }
+    if (prefData?.instructions) {
+      setSpecialInstructions(prefData.instructions);
+    }
     setCurrentScreen('payment');
   };
 
   const handleAuthorizePayment = () => {
-    showToast('Payment authorized! Confirming order...');
+    const newOrder = createOrder({
+      customerName: 'Alex Morgan',
+      phone: momoNumber,
+      address: address,
+      slot: scheduledTime,
+      services: selectedServices,
+      amount: totalAmount,
+      paymentMethod: selectedNetwork === 'mtn' ? 'MTN Mobile Money' : selectedNetwork === 'telecel' ? 'Telecel Cash' : 'AT Money',
+      specialNotes: specialInstructions,
+      partnerName: selectedPartner.name
+    });
+
+    setActiveBookingRef(newOrder.id);
+    showToast(`Order #${newOrder.id} confirmed & sent to ${selectedPartner.name}!`);
     setCurrentScreen('confirmation');
   };
 
@@ -296,6 +341,7 @@ export default function App() {
             partner={selectedPartner}
             scheduledTime={scheduledTime}
             totalAmount={totalAmount}
+            bookingReference={activeBookingRef}
             onBackToHome={() => setCurrentScreen('providers')}
             onTrackStatus={() => setCurrentScreen('tracking')}
           />
@@ -306,6 +352,7 @@ export default function App() {
             partner={selectedPartner}
             scheduledTime={scheduledTime}
             totalAmount={totalAmount}
+            bookingReference={activeBookingRef}
             momoNumber={momoNumber}
             onBack={() => setCurrentScreen('confirmation')}
             onSupportClick={() => showToast('Connecting to Customer Support...')}

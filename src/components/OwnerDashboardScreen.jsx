@@ -23,6 +23,8 @@ import OwnerProfileSetupScreen from './OwnerProfileSetupScreen.jsx';
 import OwnerServicesPricingScreen from './OwnerServicesPricingScreen.jsx';
 import OwnerShopProfileScreen from './OwnerShopProfileScreen.jsx';
 
+import { createOrder } from '../data/ordersStore';
+
 export default function OwnerDashboardScreen({
   onBackToApp,
   onLogout,
@@ -59,7 +61,19 @@ export default function OwnerDashboardScreen({
       showToast('Please enter customer name');
       return;
     }
-    showToast(`Created walk-in wash ticket for ${walkInName}`);
+
+    createOrder({
+      customerName: walkInName.trim(),
+      phone: walkInPhone.trim() || '+233 24 000 0000',
+      address: 'Walk-In Customer (In-Store Dropoff)',
+      slot: 'Today (Immediate)',
+      services: [{ name: walkInService, price: walkInAmount }],
+      amount: walkInAmount,
+      paymentMethod: 'Cash / In-Store POS',
+      specialNotes: 'Direct shop walk-in intake'
+    });
+
+    showToast(`Created & logged walk-in wash ticket for ${walkInName}`);
     setIsWalkInModalOpen(false);
     setWalkInName('');
     setWalkInPhone('');

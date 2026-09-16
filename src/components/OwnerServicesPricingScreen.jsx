@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Tag,
   Plus,
@@ -22,6 +22,7 @@ import {
   Filter,
   X
 } from 'lucide-react';
+import { getServicesCatalog, saveServicesCatalog } from '../data/servicesStore';
 
 export default function OwnerServicesPricingScreen({ onShowToast }) {
   const [activeCategory, setActiveCategory] = useState('All');
@@ -31,113 +32,17 @@ export default function OwnerServicesPricingScreen({ onShowToast }) {
   const [modalService, setModalService] = useState(null);
   const [isNewService, setIsNewService] = useState(false);
 
-  // Initial full services catalog data
-  const [services, setServices] = useState([
-    {
-      id: 1,
-      name: 'Wash & Fold',
-      category: 'Wash & Fold',
-      description: 'Everyday garments, t-shirts, jeans, bedsheets, and towels washed, dried, and neatly packed.',
-      unit: 'per kg',
-      price: '37.00',
-      turnaround: '24 hrs',
-      minOrder: '3 kg min',
-      popular: true,
-      active: true,
-      iconName: 'shirt'
-    },
-    {
-      id: 2,
-      name: 'Dry Cleaning (Suits & Blazers)',
-      category: 'Dry Clean & Press',
-      description: 'Gentle eco-solvent cycle for two-piece suits, formal blazers, dinner jackets, and silk ties.',
-      unit: 'per item',
-      price: '90.00',
-      turnaround: '48 hrs',
-      minOrder: '1 item',
-      popular: false,
-      active: true,
-      iconName: 'building'
-    },
-    {
-      id: 3,
-      name: 'Steam Iron & Press Only',
-      category: 'Dry Clean & Press',
-      description: 'High-pressure commercial steam pressing without wash cycle. Crisp collars and sharp creases.',
-      unit: 'per item',
-      price: '25.00',
-      turnaround: '12 hrs',
-      minOrder: '2 items',
-      popular: false,
-      active: true,
-      iconName: 'zap'
-    },
-    {
-      id: 4,
-      name: 'Duvet & Heavy Comforter Clean',
-      category: 'Bulky & Household',
-      description: 'King and Queen size heavy fiber comforters, duvets, weighted blankets, and winter quilts.',
-      unit: 'per piece',
-      price: '120.00',
-      turnaround: '48 hrs',
-      minOrder: '1 piece',
-      popular: true,
-      active: true,
-      iconName: 'sparkles'
-    },
-    {
-      id: 5,
-      name: 'Express Wash & Dry (Same Day)',
-      category: 'Wash & Fold',
-      description: 'Priority rush cycle. Delivered back freshly folded within 4 to 6 hours of intake pickup.',
-      unit: 'per kg',
-      price: '65.00',
-      turnaround: '4-6 hrs',
-      minOrder: '4 kg min',
-      popular: true,
-      active: true,
-      iconName: 'zap'
-    },
-    {
-      id: 6,
-      name: 'Sneaker & Footwear Restoration',
-      category: 'Specialty',
-      description: 'Hand scrub, midsole whitening, deep mesh extraction, insole wash, and deodorization.',
-      unit: 'per pair',
-      price: '80.00',
-      turnaround: '48 hrs',
-      minOrder: '1 pair',
-      popular: false,
-      active: true,
-      iconName: 'sparkles'
-    },
-    {
-      id: 7,
-      name: 'Curtains & Window Drapes',
-      category: 'Bulky & Household',
-      description: 'Anti-dustmite delicate fabric wash, steam finish, and wrinkle-free protective garment bag.',
-      unit: 'per set',
-      price: '150.00',
-      turnaround: '72 hrs',
-      minOrder: '1 set',
-      popular: false,
-      active: true,
-      iconName: 'package'
-    },
-    {
-      id: 8,
-      name: 'Traditional Wear (Kente & Agbada)',
-      category: 'Specialty',
-      description: 'Handcrafted fabric care with color-lock preservation, mild organic soap, and hand starching.',
-      unit: 'per set',
-      price: '110.00',
-      turnaround: '48 hrs',
-      minOrder: '1 set',
-      popular: false,
-      active: true,
-      iconName: 'shirt'
-    }
-  ]);
+  // Initial full services catalog data loaded from store
+  const [services, setServices] = useState(() => getServicesCatalog());
+
+  useEffect(() => {
+    const handleUpdate = (e) => {
+      if (e.detail) setServices(e.detail);
+      else setServices(getServicesCatalog());
+    };
+    window.addEventListener('quickwash:services_updated', handleUpdate);
+    return () => window.removeEventListener('quickwash:services_updated', handleUpdate);
+  }, []);
 
   // Add-ons & Treatment Modifiers State
   const [addons, setAddons] = useState([
@@ -158,14 +63,16 @@ export default function OwnerServicesPricingScreen({ onShowToast }) {
   });
 
   const handleToggleActive = (id) => {
-    setServices(prev => prev.map(s => {
+    const updated = services.map(s => {
       if (s.id === id) {
         const nextState = !s.active;
         if (onShowToast) onShowToast(`${s.name} is now ${nextState ? 'Active' : 'Paused'} on Marketplace`);
         return { ...s, active: nextState };
       }
       return s;
-    }));
+    });
+    setServices(updated);
+    saveServicesCatalog(updated);
   };
 
   const handleOpenEdit = (service) => {
@@ -197,19 +104,24 @@ export default function OwnerServicesPricingScreen({ onShowToast }) {
       return;
     }
 
+    let updated;
     if (isNewService) {
-      setServices([modalService, ...services]);
+      updated = [modalService, ...services];
       if (onShowToast) onShowToast(`Added "${modalService.name}" to service catalog`);
     } else {
-      setServices(prev => prev.map(s => s.id === modalService.id ? modalService : s));
+      updated = services.map(s => s.id === modalService.id ? modalService : s);
       if (onShowToast) onShowToast(`Updated "${modalService.name}" details & rates`);
     }
 
+    setServices(updated);
+    saveServicesCatalog(updated);
     setModalService(null);
   };
 
   const handleDeleteFromModal = (id) => {
-    setServices(prev => prev.filter(s => s.id !== id));
+    const updated = services.filter(s => s.id !== id);
+    setServices(updated);
+    saveServicesCatalog(updated);
     if (onShowToast) onShowToast(`Removed "${modalService.name}" from catalog`);
     setModalService(null);
   };

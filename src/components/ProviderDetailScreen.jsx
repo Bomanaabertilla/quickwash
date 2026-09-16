@@ -23,6 +23,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { getPublishedAvailability } from '../data/availabilityStore.js';
+import { getShopProfile } from '../data/shopStore.js';
 
 export default function ProviderDetailScreen({
   partner,
@@ -31,6 +32,7 @@ export default function ProviderDetailScreen({
   onSupportClick,
   onProfileClick
 }) {
+  const [shopProfile, setShopProfile] = useState(() => getShopProfile());
   const [publishedSchedule, setPublishedSchedule] = useState(() => getPublishedAvailability());
   const [selectedDateId, setSelectedDateId] = useState('tue');
   const [selectedSlot, setSelectedSlot] = useState({
@@ -40,21 +42,31 @@ export default function ProviderDetailScreen({
   });
   const [isRetrying, setIsRetrying] = useState(false);
 
-  // Listen for live published schedule updates from the owner dashboard
+  // Listen for live published schedule and shop profile updates
   useEffect(() => {
     const handleSync = (e) => {
       if (e.detail) {
         setPublishedSchedule(e.detail);
       }
     };
+    const handleShopSync = (e) => {
+      if (e.detail) {
+        setShopProfile(e.detail);
+      }
+    };
     window.addEventListener('quickwash:availability_updated', handleSync);
-    return () => window.removeEventListener('quickwash:availability_updated', handleSync);
+    window.addEventListener('quickwash:shop_updated', handleShopSync);
+    return () => {
+      window.removeEventListener('quickwash:availability_updated', handleSync);
+      window.removeEventListener('quickwash:shop_updated', handleShopSync);
+    };
   }, []);
 
   const handleRetryOffline = () => {
     setIsRetrying(true);
     setTimeout(() => {
       setPublishedSchedule(getPublishedAvailability());
+      setShopProfile(getShopProfile());
       setIsRetrying(false);
     }, 600);
   };
@@ -122,8 +134,9 @@ export default function ProviderDetailScreen({
     });
   };
 
-  const partnerName = partner?.name || 'Sparkle Express Laundry';
+  const partnerName = partner?.id === 'sparkle' || !partner?.id ? shopProfile.name : (partner?.name || 'Sparkle Express Laundry');
   const partnerImage = partner?.image || '/assets/images/sparkle_express_laundry.jpg';
+  const partnerAddress = partner?.id === 'sparkle' || !partner?.id ? `${shopProfile.neighborhood || 'Midtown'} • ${shopProfile.digitalAddress || '0.8 mi'}` : `${partner?.neighborhood || 'Midtown'} • ${partner?.distance || '0.8 mi'}`;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f7f9fc]">
@@ -233,7 +246,7 @@ export default function ProviderDetailScreen({
 
                 <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
                   <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                  <span className="truncate">Upper West Side • 0.6 miles away</span>
+                  <span className="truncate">{partnerAddress}</span>
                 </div>
               </div>
 

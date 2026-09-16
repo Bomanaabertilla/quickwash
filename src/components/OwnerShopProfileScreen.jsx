@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Store,
   MapPin,
@@ -31,6 +31,7 @@ import {
   Cpu,
   Power
 } from 'lucide-react';
+import { getShopProfile, saveShopProfile } from '../data/shopStore';
 
 export default function OwnerShopProfileScreen({
   onBackToDashboard,
@@ -39,23 +40,23 @@ export default function OwnerShopProfileScreen({
 }) {
   const [isUnsaved, setIsUnsaved] = useState(false);
 
-  // Shop Details & Location State
-  const [shopName, setShopName] = useState('Sparkle Express Laundry');
-  const [branchDescriptor, setBranchDescriptor] = useState('Ring Road Central Flagship');
-  const [shopCategory, setShopCategory] = useState('Laundromat & Dry Cleaning');
-  const [physicalAddress, setPhysicalAddress] = useState('Plot 14B, Upper West Side, Ring Road Central, Accra');
-  const [digitalAddress, setDigitalAddress] = useState('GA-183-4920');
-  const [deliveryRadius, setDeliveryRadius] = useState(8.5);
+  // Shop Details & Location State loaded from store
+  const [shopName, setShopName] = useState(() => getShopProfile().name);
+  const [branchDescriptor, setBranchDescriptor] = useState(() => getShopProfile().branchDescriptor);
+  const [shopCategory, setShopCategory] = useState(() => getShopProfile().category);
+  const [physicalAddress, setPhysicalAddress] = useState(() => getShopProfile().physicalAddress);
+  const [digitalAddress, setDigitalAddress] = useState(() => getShopProfile().digitalAddress);
+  const [deliveryRadius, setDeliveryRadius] = useState(() => getShopProfile().deliveryRadius);
 
   // Contact Information State
-  const [primaryPhone, setPrimaryPhone] = useState('+233 24 123 4567');
-  const [whatsapp, setWhatsapp] = useState('+233 55 987 6543');
-  const [businessEmail, setBusinessEmail] = useState('accra@sparklewash.com');
+  const [primaryPhone, setPrimaryPhone] = useState(() => getShopProfile().primaryPhone);
+  const [whatsapp, setWhatsapp] = useState(() => getShopProfile().whatsapp);
+  const [businessEmail, setBusinessEmail] = useState(() => getShopProfile().businessEmail);
 
   // Operating Hours & Turnaround Promise
-  const [openTime, setOpenTime] = useState('07:00');
-  const [closeTime, setCloseTime] = useState('20:30');
-  const [turnaroundPromise, setTurnaroundPromise] = useState('24h');
+  const [openTime, setOpenTime] = useState(() => getShopProfile().openTime);
+  const [closeTime, setCloseTime] = useState(() => getShopProfile().closeTime);
+  const [turnaroundPromise, setTurnaroundPromise] = useState(() => getShopProfile().turnaroundPromise);
 
   // Facilities
   const [equipment] = useState([
@@ -74,6 +75,20 @@ export default function OwnerShopProfileScreen({
   ]);
 
   const handleSave = () => {
+    saveShopProfile({
+      name: shopName,
+      branchDescriptor,
+      category: shopCategory,
+      physicalAddress,
+      digitalAddress,
+      deliveryRadius,
+      primaryPhone,
+      whatsapp,
+      businessEmail,
+      openTime,
+      closeTime,
+      turnaroundPromise
+    });
     setIsUnsaved(false);
     if (onShowToast) onShowToast('Shop profile changes live synced to QuickWash marketplace!');
   };

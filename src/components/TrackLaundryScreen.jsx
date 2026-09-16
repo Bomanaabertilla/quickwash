@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, 
   HelpCircle, 
@@ -17,26 +17,42 @@ import {
   Truck, 
   Download, 
   MessageSquare,
-  Bike
+  Bike,
+  PackageCheck
 } from 'lucide-react';
+import { getOrders, getOrderById, getLatestOrder } from '../data/ordersStore';
 
 export default function TrackLaundryScreen({
   partner,
   scheduledTime,
   totalAmount = '390.00',
-  bookingReference = 'LB-2026-0091',
+  bookingReference,
   momoNumber = '+233 24 123 4567',
   onBack,
   onSupportClick,
   onProfileClick
 }) {
-  const [searchPhone, setSearchPhone] = useState('24 123 4567');
-  const [searchCode, setSearchCode] = useState(bookingReference);
+  const [currentOrder, setCurrentOrder] = useState(() => {
+    if (bookingReference) return getOrderById(bookingReference);
+    return getLatestOrder();
+  });
+  const [searchPhone, setSearchPhone] = useState(() => momoNumber?.replace('+233 ', '') || '24 123 4567');
+  const [searchCode, setSearchCode] = useState(() => currentOrder?.id || bookingReference || 'LB-2026-0091');
   const [phoneCode, setPhoneCode] = useState('+233');
   const [isCopied, setIsCopied] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [hasLookedUp, setHasLookedUp] = useState(true);
   const [toastText, setToastText] = useState(null);
+
+  useEffect(() => {
+    const handleUpdate = (e) => {
+      const all = e.detail || getOrders();
+      const match = all.find(o => o.id === searchCode) || all[0];
+      if (match) setCurrentOrder(match);
+    };
+    window.addEventListener('quickwash:orders_updated', handleUpdate);
+    return () => window.removeEventListener('quickwash:orders_updated', handleUpdate);
+  }, [searchCode]);
 
   const handleCopyCode = () => {
     navigator.clipboard?.writeText(searchCode);
@@ -49,21 +65,35 @@ export default function TrackLaundryScreen({
       const text = await navigator.clipboard?.readText();
       if (text) setSearchCode(text.trim());
     } catch {
-      setSearchCode(bookingReference);
+      setSearchCode(bookingReference || 'LB-2026-0091');
     }
   };
 
   const handleLookup = () => {
-    setHasLookedUp(true);
-    setToastText('Booking found live!');
-    setTimeout(() => setToastText(null), 2000);
+    const all = getOrders();
+    const query = searchCode.trim().toLowerCase();
+    const phoneClean = searchPhone.replace(/\s+/g, '');
+    const found = all.find(o => 
+      o.id.toLowerCase() === query || 
+      (phoneClean && o.phone?.replace(/\s+/g, '').includes(phoneClean))
+    );
+
+    if (found) {
+      setCurrentOrder(found);
+      setSearchCode(found.id);
+      setHasLookedUp(true);
+      setToastText(`Found live order #${found.id}!`);
+    } else {
+      setToastText('Order not found with provided reference');
+    }
+    setTimeout(() => setToastText(null), 2500);
   };
 
   const handleSaveReceipt = () => {
     alert(`Downloading Official QuickWash Digital Receipt for Order ${searchCode}...`);
   };
 
-  const partnerDisplayName = partner?.name || 'Sparkle Express Laundry';
+  const partnerDisplayName = currentOrder?.partnerName || partner?.name || 'Sparkle Express Laundry';
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f7f9fc] relative">
@@ -262,7 +292,7 @@ export default function TrackLaundryScreen({
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-[17px] font-extrabold text-slate-900 font-mono">
-                    {searchCode}
+                    {currentOrder?.id || searchCode}
                   </span>
                   <button onClick={handleCopyCode} title="Copy code">
                     <Copy className="w-4 h-4 text-[#006a60] hover:text-[#005850]" />
@@ -271,9 +301,21 @@ export default function TrackLaundryScreen({
                 </div>
               </div>
 
-              <div className="bg-teal-50 text-[#006a60] text-[11.5px] font-extrabold px-3 py-1 rounded-full flex items-center gap-1.5 border border-teal-100">
-                <span className="w-2 h-2 rounded-full bg-[#006a60] animate-pulse"></span>
-                <span>Confirmed • Driver assigned</span>
+              <div className={`text-[11.5px] font-extrabold px-3 py-1 rounded-full flex items-center gap-1.5 border ${
+                currentOrder?.status === 'Delivered' || currentOrder?.status === 'Ready / Delivered'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : currentOrder?.status === 'In progress' || currentOrder?.status === 'In wash'
+                  ? 'bg-amber-50 text-amber-800 border-amber-200'
+                  : 'bg-teal-50 text-[#006a60] border-teal-100'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${
+                  currentOrder?.status === 'Delivered' || currentOrder?.status === 'Ready / Delivered'
+                    ? 'bg-emerald-600'
+                    : currentOrder?.status === 'In progress' || currentOrder?.status === 'In wash'
+                    ? 'bg-amber-500 animate-pulse'
+                    : 'bg-[#006a60] animate-pulse'
+                }`}></span>
+                <span>{currentOrder?.status || 'Confirmed'} • {currentOrder?.assignedRider || 'Driver assigned'}</span>
               </div>
             </div>
 
@@ -281,14 +323,22 @@ export default function TrackLaundryScreen({
             <div className="bg-[#f0f4f9] rounded-2xl p-3.5 flex flex-col gap-3">
               <div className="flex items-center justify-between text-xs font-bold">
                 <span className="text-slate-800">Order Lifecycle</span>
-                <span className="text-[#006a60]">Estimated: Today, 5:00 PM</span>
+                <span className="text-[#006a60]">
+                  {currentOrder?.status === 'Delivered' ? 'Completed & Delivered' : 'Estimated: In Progress'}
+                </span>
               </div>
 
               {/* 4-Step Horizontal Timeline Line */}
               <div className="grid grid-cols-4 gap-1 relative pt-2">
                 {/* Connecting line */}
                 <div className="absolute top-[21px] left-6 right-6 h-0.5 bg-slate-200 z-0"></div>
-                <div className="absolute top-[21px] left-6 w-1/3 h-0.5 bg-[#006a60] z-0"></div>
+                <div className={`absolute top-[21px] left-6 h-0.5 bg-[#006a60] z-0 transition-all duration-500 ${
+                  currentOrder?.status === 'Delivered' || currentOrder?.status === 'Ready / Delivered'
+                    ? 'w-[90%]'
+                    : currentOrder?.status === 'In progress' || currentOrder?.status === 'In wash'
+                    ? 'w-[60%]'
+                    : 'w-[25%]'
+                }`}></div>
 
                 {/* Step 1: Booked */}
                 <div className="flex flex-col items-center text-center z-10 gap-1">
@@ -296,38 +346,60 @@ export default function TrackLaundryScreen({
                     <Check className="w-4 h-4 stroke-[3]" />
                   </div>
                   <span className="text-[11px] font-extrabold text-slate-900 leading-tight">Booked</span>
-                  <span className="text-[10px] font-medium text-slate-400">10:15 AM</span>
+                  <span className="text-[10px] font-medium text-slate-400">Confirmed</span>
                 </div>
 
-                {/* Step 2: Pickup (Active) */}
+                {/* Step 2: Pickup */}
                 <div className="flex flex-col items-center text-center z-10 gap-1">
-                  <div className="w-7 h-7 rounded-full bg-[#006a60] text-white flex items-center justify-center shadow-sm ring-4 ring-[#006a60]/20">
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center shadow-sm ${
+                    currentOrder?.status !== 'Confirmed'
+                      ? 'bg-[#006a60] text-white'
+                      : 'bg-[#006a60] text-white ring-4 ring-[#006a60]/20'
+                  }`}>
                     <Truck className="w-3.5 h-3.5 stroke-[2.5]" />
                   </div>
                   <span className="text-[11px] font-extrabold text-[#006a60] leading-tight">Pickup</span>
-                  <span className="text-[10px] font-bold text-[#006a60]">On the way</span>
+                  <span className="text-[10px] font-bold text-[#006a60]">Collected</span>
                 </div>
 
-                {/* Step 3: Care */}
-                <div className="flex flex-col items-center text-center z-10 gap-1 opacity-50">
-                  <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center">
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
-                    </svg>
+                {/* Step 3: Care / Wash */}
+                <div className={`flex flex-col items-center text-center z-10 gap-1 ${
+                  currentOrder?.status === 'In progress' || currentOrder?.status === 'In wash' || currentOrder?.status === 'Delivered' || currentOrder?.status === 'Ready / Delivered'
+                    ? ''
+                    : 'opacity-50'
+                }`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center ${
+                    currentOrder?.status === 'In progress' || currentOrder?.status === 'In wash'
+                      ? 'bg-amber-500 text-white ring-4 ring-amber-500/20'
+                      : currentOrder?.status === 'Delivered' || currentOrder?.status === 'Ready / Delivered'
+                      ? 'bg-[#006a60] text-white'
+                      : 'bg-slate-200 text-slate-600'
+                  }`}>
+                    <Shirt className="w-3.5 h-3.5" />
                   </div>
-                  <span className="text-[11px] font-bold text-slate-700 leading-tight">Care</span>
-                  <span className="text-[10px] text-slate-400">Upcoming</span>
+                  <span className="text-[11px] font-bold text-slate-700 leading-tight">Washing</span>
+                  <span className="text-[10px] text-slate-400">
+                    {currentOrder?.status === 'In progress' || currentOrder?.status === 'In wash' ? 'In Wash' : 'Step 3'}
+                  </span>
                 </div>
 
                 {/* Step 4: Delivery */}
-                <div className="flex flex-col items-center text-center z-10 gap-1 opacity-50">
-                  <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center">
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                    </svg>
+                <div className={`flex flex-col items-center text-center z-10 gap-1 ${
+                  currentOrder?.status === 'Delivered' || currentOrder?.status === 'Ready / Delivered'
+                    ? ''
+                    : 'opacity-50'
+                }`}>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center ${
+                    currentOrder?.status === 'Delivered' || currentOrder?.status === 'Ready / Delivered'
+                      ? 'bg-emerald-600 text-white ring-4 ring-emerald-600/20'
+                      : 'bg-slate-200 text-slate-600'
+                  }`}>
+                    <PackageCheck className="w-3.5 h-3.5" />
                   </div>
                   <span className="text-[11px] font-bold text-slate-700 leading-tight">Delivery</span>
-                  <span className="text-[10px] text-slate-400">5:00 PM</span>
+                  <span className="text-[10px] text-slate-400">
+                    {currentOrder?.status === 'Delivered' || currentOrder?.status === 'Ready / Delivered' ? 'Done' : 'Pending'}
+                  </span>
                 </div>
 
               </div>
@@ -341,16 +413,16 @@ export default function TrackLaundryScreen({
                 </div>
                 <div>
                   <div className="text-xs font-extrabold text-slate-900">
-                    Kwame Mensah • Rider #412
+                    {currentOrder?.assignedRider || 'Kwame Mensah • Rider #412'}
                   </div>
                   <div className="text-[11px] text-slate-500 font-medium">
-                    Arriving for doorstep pickup in ~12 mins
+                    {currentOrder?.address || 'Pickup from registered address'}
                   </div>
                 </div>
               </div>
 
               <button
-                onClick={() => alert('Calling Kwame Mensah (+233 20 888 9900)...')}
+                onClick={() => alert(`Calling courier (${currentOrder?.phone || '+233 24 123 4567'})...`)}
                 className="bg-blue-50 text-blue-700 hover:bg-blue-100 font-extrabold text-xs px-3.5 py-1.5 rounded-xl flex items-center gap-1 border border-blue-200/60"
               >
                 <PhoneCall className="w-3.5 h-3.5" />
@@ -373,7 +445,7 @@ export default function TrackLaundryScreen({
                   <Clock className="w-4 h-4 text-slate-400" />
                   <span>Scheduled slot</span>
                 </div>
-                <span className="font-extrabold text-slate-900">{scheduledTime || 'Tue, May 13 • 1:30 PM'}</span>
+                <span className="font-extrabold text-slate-900">{currentOrder?.slot || scheduledTime || 'Mon, May 25 • 10:00 AM'}</span>
               </div>
 
               <div className="flex items-center justify-between">
@@ -381,7 +453,7 @@ export default function TrackLaundryScreen({
                   <Shirt className="w-4 h-4 text-slate-400" />
                   <span>Services</span>
                 </div>
-                <span className="font-bold text-slate-900">Wash & Fold (5kg) + 2 Dry Clean</span>
+                <span className="font-bold text-slate-900">{currentOrder?.summary || 'Wash & Fold'}</span>
               </div>
 
               <div className="flex items-center justify-between pt-1">
@@ -390,8 +462,12 @@ export default function TrackLaundryScreen({
                   <span>Total paid</span>
                 </div>
                 <div className="flex flex-col items-end">
-                  <span className="text-sm font-extrabold text-[#006a60]">GH₵ {totalAmount}</span>
-                  <span className="text-[10px] text-slate-400 font-medium">Paid via MTN MoMo</span>
+                  <span className="text-sm font-extrabold text-[#006a60]">
+                    GH₵ {currentOrder?.amount || totalAmount}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    Paid via {currentOrder?.paymentMethod || 'MTN MoMo'}
+                  </span>
                 </div>
               </div>
             </div>
