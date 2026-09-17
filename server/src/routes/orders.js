@@ -80,15 +80,17 @@ router.post('/', async (req, res) => {
     const slotLower = (slot || '').toLowerCase();
 
     let resolvedDay = day ? day.trim().toLowerCase() : '';
-    if (!resolvedDay || resolvedDay.includes('today') || resolvedDay.includes('now') || slotLower.includes('today')) {
+    if (resolvedDay.includes('today') || resolvedDay.includes('now') || slotLower.includes('today') || slotLower.includes('immediate')) {
       resolvedDay = todayDayId;
     } else {
+      let matchedDay = null;
       for (const d of ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']) {
-        if (resolvedDay.includes(d) || slotLower.includes(d)) {
-          resolvedDay = d;
+        if ((resolvedDay && resolvedDay.includes(d)) || slotLower.includes(d)) {
+          matchedDay = d;
           break;
         }
       }
+      resolvedDay = matchedDay || todayDayId;
     }
 
     // Extract time from slot or timeKey
