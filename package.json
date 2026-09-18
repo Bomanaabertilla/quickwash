@@ -1,29 +1,20 @@
 {
-  "name": "quickwash",
+  "name": "quickwash-monorepo",
   "private": true,
   "version": "1.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "vite --port 3000 --host",
-    "build": "vite build",
-    "preview": "vite preview --port 3000",
-    "server": "npm --prefix server run dev",
-    "server:start": "npm --prefix server start",
-    "server:seed": "npm --prefix server run db:seed"
-  },
-  "dependencies": {
-    "lucide-react": "^0.344.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "dev": "pnpm --parallel --filter @quickwash/web --filter @quickwash/server dev",
+    "dev:web": "pnpm --filter @quickwash/web dev",
+    "dev:server": "pnpm --filter @quickwash/server dev",
+    "build": "pnpm --filter @quickwash/shared typecheck && pnpm --filter @quickwash/server build && pnpm --filter @quickwash/web build",
+    "typecheck": "pnpm -r typecheck",
+    "start": "pnpm --parallel --filter @quickwash/web preview --filter @quickwash/server start",
+    "preview": "pnpm --filter @quickwash/web preview",
+    "db:push": "pnpm --filter @quickwash/server db:push",
+    "db:seed": "pnpm --filter @quickwash/server db:seed",
+    "db:generate": "pnpm --filter @quickwash/server db:generate"
   },
   "devDependencies": {
-    "@types/react": "^18.2.66",
-    "@types/react-dom": "^18.2.22",
-    "@vitejs/plugin-react": "^4.2.1",
-    "autoprefixer": "^10.4.19",
-    "postcss": "^8.4.38",
-    "tailwindcss": "^3.4.1",
-    "vite": "^5.2.0",
-    "vite-plugin-pwa": "^0.19.8"
+    "typescript": "^5.4.5"
   }
 }
